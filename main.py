@@ -17,6 +17,9 @@ from src.api.health import router as health_router
 from src.config import get_settings, ensure_directories
 from src.database import create_tables
 
+# Ensure logs directory exists
+Path("logs").mkdir(exist_ok=True)
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,

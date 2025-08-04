@@ -1,18 +1,14 @@
 # Multi-stage build for PDF Translation Service
-FROM nvidia/cuda:12.1-devel-ubuntu22.04 as base
+FROM python:3.10-slim as base
 
 # Set environment variables
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
-ENV CUDA_VISIBLE_DEVICES=0
+# CPU-only build for CI/CD compatibility
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
-    python3 \
-    python3-pip \
-    python3-dev \
-    python3-venv \
     build-essential \
     curl \
     wget \

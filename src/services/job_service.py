@@ -6,7 +6,8 @@ import uuid
 from typing import Optional
 
 import redis
-from rq import Queue, Job as RQJob
+from rq import Queue
+from rq.job import Job as RQJob
 
 from src.config import get_settings
 from src.models.job import DocumentType

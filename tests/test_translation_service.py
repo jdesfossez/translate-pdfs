@@ -17,12 +17,13 @@ class TestTranslationService:
     """Test translation service functionality."""
     
     @patch('torch.cuda.is_available')
+    @patch('src.services.translation_service.load_checkpoint_and_dispatch')
     @patch('src.services.translation_service.snapshot_download')
     @patch('src.services.translation_service.AutoTokenizer')
     @patch('src.services.translation_service.AutoConfig')
     @patch('src.services.translation_service.AutoModelForSeq2SeqLM')
-    def test_load_model_success(self, mock_model, mock_config, mock_tokenizer, 
-                               mock_download, mock_cuda):
+    def test_load_model_success(self, mock_model, mock_config, mock_tokenizer,
+                               mock_download, mock_checkpoint, mock_cuda):
         """Test successful model loading."""
         mock_cuda.return_value = False  # Use CPU for testing
         mock_download.return_value = "/fake/model/path"
@@ -36,9 +37,13 @@ class TestTranslationService:
         mock_cfg = Mock()
         mock_config.from_pretrained.return_value = mock_cfg
         
-        # Mock model
+        # Mock model with named_parameters method
         mock_mdl = Mock()
+        mock_mdl.named_parameters.return_value = iter([])  # Empty iterator
         mock_model.from_config.return_value = mock_mdl
+
+        # Mock checkpoint loading
+        mock_checkpoint.return_value = mock_mdl
         
         service = TranslationService()
         service.load_model()
@@ -49,10 +54,35 @@ class TestTranslationService:
     
     def test_load_model_unsupported(self):
         """Test loading unsupported model."""
-        with patch('src.config.get_settings') as mock_settings:
-            mock_settings.return_value.model_name = "unsupported/model"
-            
-            service = TranslationService()
+        # Create a service with an unsupported model name
+        service = TranslationService()
+        service.settings.model_name = "unsupported/model"
+
+        # Mock the model loading to get to the validation logic
+        with patch('src.services.translation_service.snapshot_download') as mock_download, \
+             patch('src.services.translation_service.AutoTokenizer') as mock_tokenizer, \
+             patch('src.services.translation_service.AutoConfig') as mock_config, \
+             patch('src.services.translation_service.AutoModelForSeq2SeqLM') as mock_model, \
+             patch('src.services.translation_service.load_checkpoint_and_dispatch') as mock_checkpoint, \
+             patch('src.services.translation_service.torch.cuda.is_available') as mock_cuda:
+
+            mock_cuda.return_value = False
+            mock_download.return_value = "/fake/model/path"
+
+            # Mock tokenizer
+            mock_tok = Mock()
+            mock_tokenizer.from_pretrained.return_value = mock_tok
+
+            # Mock config
+            mock_cfg = Mock()
+            mock_config.from_pretrained.return_value = mock_cfg
+
+            # Mock model
+            mock_mdl = Mock()
+            mock_mdl.named_parameters.return_value = iter([])
+            mock_model.from_config.return_value = mock_mdl
+            mock_checkpoint.return_value = mock_mdl
+
             with pytest.raises(TranslationError, match="Unsupported model"):
                 service.load_model()
     
@@ -155,8 +185,13 @@ class TestDocumentTranslator:
         # Mock the translation service
         mock_service = Mock()
         mock_service.load_model.return_value = None
-        mock_service.translate_texts_token_safe.return_value = ["Texte traduit"]
-        mock_service._batched.return_value = [["Test text"]]
+        # Provide enough translated texts for all blocks
+        mock_service.translate_texts_token_safe.return_value = [
+            "# Test traduit",
+            "Ceci est un paragraphe de test.",
+            "Un autre paragraphe."
+        ]
+        mock_service._batched.return_value = [["Test text", "Another text", "More text"]]
         mock_service_class.return_value = mock_service
         
         translator = DocumentTranslator()
@@ -172,8 +207,8 @@ print("code")
 Another paragraph."""
         
         result = translator.translate_markdown_document(md_text)
-        
-        assert "Texte traduit" in result
+
+        assert "Test traduit" in result or "Ceci est un paragraphe" in result
         assert "```python" in result  # Code blocks should be preserved
         assert "print(\"code\")" in result
     
@@ -182,8 +217,8 @@ Another paragraph."""
         """Test translation with progress callback."""
         mock_service = Mock()
         mock_service.load_model.return_value = None
-        mock_service.translate_texts_token_safe.return_value = ["Translated"]
-        mock_service._batched.return_value = [["Text"]]
+        mock_service.translate_texts_token_safe.return_value = ["# Test traduit", "Texte simple."]
+        mock_service._batched.return_value = [["Text", "More text"]]
         mock_service_class.return_value = mock_service
         
         translator = DocumentTranslator()

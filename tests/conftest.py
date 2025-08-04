@@ -64,8 +64,11 @@ def client(test_settings, test_db):
     
     # Mock the settings
     import src.config
+    import src.api.jobs
     original_get_settings = src.config.get_settings
     src.config.get_settings = lambda: test_settings
+    # Also override in the jobs module
+    src.api.jobs.get_settings = lambda: test_settings
     
     try:
         with TestClient(app) as test_client:
@@ -197,8 +200,14 @@ def mock_external_tools(monkeypatch):
         mock_result.stdout = "Success"
         mock_result.stderr = ""
         return mock_result
-    
+
     monkeypatch.setattr("subprocess.run", mock_subprocess_run)
+
+
+@pytest.fixture(autouse=True)
+def mock_job_service_class(monkeypatch, mock_job_service):
+    """Mock JobService class for testing."""
+    monkeypatch.setattr("src.api.jobs.JobService", lambda: mock_job_service)
 
 
 @pytest.fixture
@@ -207,3 +216,21 @@ def mock_redis():
     mock_redis = Mock()
     mock_redis.from_url.return_value = mock_redis
     return mock_redis
+
+
+@pytest.fixture
+def mock_job_service():
+    """Mock job service for testing."""
+    mock_service = Mock()
+    mock_service.queue_job.return_value = "test-job-id"
+    mock_service.cancel_job.return_value = True
+    mock_service.get_job_status.return_value = None
+    mock_service.get_queue_info.return_value = {
+        "name": "test",
+        "length": 0,
+        "failed_count": 0,
+        "finished_count": 0,
+        "started_count": 0,
+        "deferred_count": 0
+    }
+    return mock_service

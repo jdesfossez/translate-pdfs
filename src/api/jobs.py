@@ -17,30 +17,38 @@ from src.services.job_service import JobService
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-settings = get_settings()
 
 
-@router.post("/jobs", response_model=JobResponse)
+@router.post("/jobs")
 async def create_job(
     file: UploadFile = File(...),
     document_type: DocumentType = Form(...),
     db: Session = Depends(get_db)
 ):
     """Create a new translation job."""
+    settings = get_settings()
+
     # Validate file
     if not file.filename.lower().endswith('.pdf'):
         raise HTTPException(status_code=400, detail="Only PDF files are supported")
-    
-    if file.size > settings.max_file_size:
-        raise HTTPException(status_code=400, detail="File too large")
-    
-    # Save uploaded file
-    job_id = uuid.uuid4()
-    upload_path = settings.upload_dir / str(job_id) / file.filename
-    upload_path.parent.mkdir(parents=True, exist_ok=True)
-    
+
+    # Read file content to check size
     try:
         content = await file.read()
+    except Exception as e:
+        logger.error(f"Failed to read uploaded file: {e}")
+        raise HTTPException(status_code=500, detail="Failed to read file")
+
+    # Check file size
+    if len(content) > settings.max_file_size:
+        raise HTTPException(status_code=400, detail="File too large")
+
+    # Save uploaded file
+    job_id = str(uuid.uuid4())
+    upload_path = settings.upload_dir / job_id / file.filename
+    upload_path.parent.mkdir(parents=True, exist_ok=True)
+
+    try:
         upload_path.write_bytes(content)
         logger.info(f"Uploaded file saved: {upload_path}")
     except Exception as e:
@@ -62,7 +70,7 @@ async def create_job(
     # Queue the job for processing
     job_service = JobService()
     try:
-        job_service.queue_job(job_id, str(upload_path), document_type)
+        job_service.queue_job(uuid.UUID(job_id), str(upload_path), document_type)
         logger.info(f"Job queued: {job_id}")
     except Exception as e:
         logger.error(f"Failed to queue job: {e}")
@@ -72,39 +80,78 @@ async def create_job(
         db.commit()
         raise HTTPException(status_code=500, detail="Failed to queue job")
     
-    return job.to_response()
+    # Return as dict to avoid Pydantic serialization issues
+    response = job.to_response()
+    return {
+        "id": job_id,  # Already a string
+        "filename": response.filename,
+        "document_type": response.document_type.value,
+        "status": response.status.value,
+        "stage": response.stage.value,
+        "progress": response.progress,
+        "created_at": response.created_at.isoformat(),
+        "updated_at": response.updated_at.isoformat(),
+        "error_message": response.error_message,
+        "output_files": response.output_files
+    }
 
 
-@router.get("/jobs", response_model=List[JobResponse])
+@router.get("/jobs")
 async def list_jobs(db: Session = Depends(get_db)):
     """List all jobs."""
     jobs = db.query(Job).order_by(Job.created_at.desc()).all()
-    return [job.to_response() for job in jobs]
+    return [
+        {
+            "id": job.id,  # Now it's already a string
+            "filename": job.filename,
+            "document_type": job.document_type.value,
+            "status": job.status.value,
+            "stage": job.stage.value,
+            "progress": float(job.progress),
+            "created_at": job.created_at.isoformat(),
+            "updated_at": job.updated_at.isoformat(),
+            "error_message": job.error_message,
+            "output_files": job.output_files.split(',') if job.output_files else []
+        }
+        for job in jobs
+    ]
 
 
-@router.get("/jobs/{job_id}", response_model=JobResponse)
-async def get_job(job_id: uuid.UUID, db: Session = Depends(get_db)):
+@router.get("/jobs/{job_id}")
+async def get_job(job_id: str, db: Session = Depends(get_db)):
     """Get a specific job."""
     job = db.query(Job).filter(Job.id == job_id).first()
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
-    return job.to_response()
+
+    return {
+        "id": job.id,  # Now it's already a string
+        "filename": job.filename,
+        "document_type": job.document_type.value,
+        "status": job.status.value,
+        "stage": job.stage.value,
+        "progress": float(job.progress),
+        "created_at": job.created_at.isoformat(),
+        "updated_at": job.updated_at.isoformat(),
+        "error_message": job.error_message,
+        "output_files": job.output_files.split(',') if job.output_files else []
+    }
 
 
 @router.delete("/jobs/{job_id}")
-async def cancel_job(job_id: uuid.UUID, db: Session = Depends(get_db)):
+async def cancel_job(job_id: str, db: Session = Depends(get_db)):
     """Cancel a job."""
     job = db.query(Job).filter(Job.id == job_id).first()
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
-    
+
     if job.status in [JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED]:
         raise HTTPException(status_code=400, detail="Job cannot be cancelled")
-    
+
     # Cancel the job
     job_service = JobService()
     try:
-        job_service.cancel_job(job_id)
+        job_service.cancel_job(uuid.UUID(job_id))  # Convert to UUID for job service
         job.status = JobStatus.CANCELLED
         db.commit()
         logger.info(f"Job cancelled: {job_id}")
@@ -116,17 +163,18 @@ async def cancel_job(job_id: uuid.UUID, db: Session = Depends(get_db)):
 
 
 @router.get("/jobs/{job_id}/download/{filename}")
-async def download_file(job_id: uuid.UUID, filename: str, db: Session = Depends(get_db)):
+async def download_file(job_id: str, filename: str, db: Session = Depends(get_db)):
     """Download a job output file."""
+    settings = get_settings()
     job = db.query(Job).filter(Job.id == job_id).first()
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
-    
+
     if job.status != JobStatus.COMPLETED:
         raise HTTPException(status_code=400, detail="Job not completed")
-    
+
     # Find the file
-    output_dir = settings.output_dir / str(job_id)
+    output_dir = settings.output_dir / job_id  # job_id is already a string
     file_path = output_dir / filename
     
     if not file_path.exists():
