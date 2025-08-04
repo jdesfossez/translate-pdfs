@@ -1,0 +1,82 @@
+# Multi-stage build for PDF Translation Service
+FROM nvidia/cuda:12.1-devel-ubuntu22.04 as base
+
+# Set environment variables
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV CUDA_VISIBLE_DEVICES=0
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    python3 \
+    python3-pip \
+    python3-dev \
+    python3-venv \
+    build-essential \
+    curl \
+    wget \
+    git \
+    software-properties-common \
+    # OCR dependencies
+    tesseract-ocr \
+    tesseract-ocr-eng \
+    tesseract-ocr-fra \
+    ghostscript \
+    unpaper \
+    poppler-utils \
+    # Pandoc for PDF generation
+    pandoc \
+    texlive-latex-base \
+    texlive-latex-recommended \
+    texlive-latex-extra \
+    texlive-fonts-recommended \
+    texlive-xetex \
+    # Additional utilities
+    supervisor \
+    nginx \
+    # Cleanup
+    && rm -rf /var/lib/apt/lists/*
+
+# Install latest Docling from source (if needed)
+RUN pip3 install --no-cache-dir docling
+
+# Install Python dependencies
+COPY requirements.txt /tmp/requirements.txt
+RUN pip3 install --no-cache-dir -r /tmp/requirements.txt
+
+# Create app user and directories
+RUN useradd -m -u 1000 appuser && \
+    mkdir -p /app /app/uploads /app/outputs /app/logs /app/data \
+             /var/log/supervisor /etc/supervisor/conf.d
+
+# Set working directory
+WORKDIR /app
+
+# Copy application code
+COPY . /app/
+
+# Copy configuration files
+COPY docker/supervisor.conf /etc/supervisor/conf.d/app.conf
+COPY docker/nginx.conf /etc/nginx/sites-available/default
+COPY docker/entrypoint.sh /entrypoint.sh
+
+# Set permissions
+RUN chown -R appuser:appuser /app && \
+    chmod +x /entrypoint.sh && \
+    chmod +x run_tests.py
+
+# Create model cache directory
+RUN mkdir -p /home/appuser/.cache && \
+    chown -R appuser:appuser /home/appuser/.cache
+
+# Expose ports
+EXPOSE 8000 80
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=30s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+# Use entrypoint script
+ENTRYPOINT ["/entrypoint.sh"]
+CMD ["app"]

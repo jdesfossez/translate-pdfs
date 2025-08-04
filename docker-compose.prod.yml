@@ -1,0 +1,46 @@
+# Production Docker Compose configuration
+# Use: docker compose -f docker-compose.prod.yml up -d
+
+services:
+  pdf-translator:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "80:80"
+      - "8000:8000"
+    volumes:
+      - ./uploads:/app/uploads
+      - ./outputs:/app/outputs
+      - ./logs:/app/logs
+      - ./data:/app/data
+      - model_cache:/home/appuser/.cache
+    environment:
+      - PDF_TRANSLATE_DEBUG=false
+      - PDF_TRANSLATE_HOST=0.0.0.0
+      - PDF_TRANSLATE_PORT=8000
+      - PDF_TRANSLATE_REDIS_URL=redis://localhost:6379/0
+      - PDF_TRANSLATE_DATABASE_URL=sqlite:///./data/jobs.db
+      - PDF_TRANSLATE_MODEL_NAME=facebook/nllb-200-3.3B
+      - PDF_TRANSLATE_MODEL_REVISION=refs/pr/17
+      - PDF_TRANSLATE_USE_SAFETENSORS=true
+      - PDF_TRANSLATE_CPU_LOAD_THEN_GPU=true
+      - PDF_TRANSLATE_MAX_TOKENS_PER_BATCH=64000
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+
+volumes:
+  model_cache:
+    driver: local

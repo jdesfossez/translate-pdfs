@@ -1,0 +1,71 @@
+# Development Docker Compose configuration
+# Use: docker compose up -d
+
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  pdf-translator:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./uploads:/app/uploads
+      - ./outputs:/app/outputs
+      - ./logs:/app/logs
+      - model_cache:/home/appuser/.cache
+    environment:
+      - PDF_TRANSLATE_REDIS_URL=redis://redis:6379/0
+      - PDF_TRANSLATE_DATABASE_URL=sqlite:///./data/jobs.db
+    depends_on:
+      redis:
+        condition: service_healthy
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  worker:
+    build: .
+    command: python3 -m src.workers.translation_worker
+    volumes:
+      - ./uploads:/app/uploads
+      - ./outputs:/app/outputs
+      - ./logs:/app/logs
+      - model_cache:/home/appuser/.cache
+    environment:
+      - PDF_TRANSLATE_REDIS_URL=redis://redis:6379/0
+      - PDF_TRANSLATE_DATABASE_URL=sqlite:///./data/jobs.db
+    depends_on:
+      redis:
+        condition: service_healthy
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+volumes:
+  redis_data:
+  model_cache:

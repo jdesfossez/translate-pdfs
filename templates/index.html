@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF Translation Service</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <header>
+        <div class="container">
+            <h1>PDF Translation Service</h1>
+            <p>Translate PDF documents from English to French using AI</p>
+        </div>
+    </header>
+
+    <main class="container">
+        <!-- Upload Section -->
+        <section class="upload-section">
+            <h2>Upload Document</h2>
+            <form id="uploadForm" enctype="multipart/form-data">
+                <div class="form-group">
+                    <label for="file">Select PDF File:</label>
+                    <input type="file" id="file" name="file" accept=".pdf" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="document_type">Document Type:</label>
+                    <select id="document_type" name="document_type" required>
+                        <option value="">Select document type...</option>
+                        <option value="text_pdf">Text PDF (searchable text)</option>
+                        <option value="text_image_pdf">Text Image PDF (needs OCR, clean pages)</option>
+                        <option value="scan">Scanned Document (needs OCR and cleanup)</option>
+                    </select>
+                </div>
+                
+                <button type="submit" class="btn btn-primary">Upload and Translate</button>
+            </form>
+        </section>
+
+        <!-- Jobs Section -->
+        <section class="jobs-section">
+            <h2>Translation Jobs</h2>
+            <div id="jobsList">
+                <div class="loading">Loading jobs...</div>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        // Auto-refresh interval (in milliseconds)
+        const REFRESH_INTERVAL = 5000;
+        let refreshTimer;
+
+        // Upload form handling
+        document.getElementById('uploadForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const formData = new FormData();
+            const fileInput = document.getElementById('file');
+            const documentType = document.getElementById('document_type').value;
+            
+            if (!fileInput.files[0] || !documentType) {
+                alert('Please select a file and document type');
+                return;
+            }
+            
+            formData.append('file', fileInput.files[0]);
+            formData.append('document_type', documentType);
+            
+            try {
+                const response = await fetch('/api/jobs', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    alert('File uploaded successfully! Job ID: ' + result.id);
+                    document.getElementById('uploadForm').reset();
+                    loadJobs(); // Refresh job list
+                } else {
+                    const error = await response.json();
+                    alert('Upload failed: ' + (error.detail || 'Unknown error'));
+                }
+            } catch (error) {
+                alert('Upload failed: ' + error.message);
+            }
+        });
+
+        // Load and display jobs
+        async function loadJobs() {
+            try {
+                const response = await fetch('/api/jobs');
+                const jobs = await response.json();
+                
+                const jobsList = document.getElementById('jobsList');
+                
+                if (jobs.length === 0) {
+                    jobsList.innerHTML = '<div class="loading">No jobs found</div>';
+                    return;
+                }
+                
+                jobsList.innerHTML = jobs.map(job => `
+                    <div class="job-card">
+                        <div class="job-header">
+                            <div class="job-title">${job.filename}</div>
+                            <div class="status-badge status-${job.status}">${job.status}</div>
+                        </div>
+                        
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: ${job.progress}%"></div>
+                        </div>
+                        
+                        <div class="job-meta">
+                            <div><strong>Type:</strong> ${job.document_type.replace('_', ' ')}</div>
+                            <div><strong>Stage:</strong> ${job.stage.replace('_', ' ')}</div>
+                            <div><strong>Progress:</strong> ${job.progress.toFixed(1)}%</div>
+                            <div><strong>Created:</strong> ${new Date(job.created_at).toLocaleString()}</div>
+                        </div>
+                        
+                        ${job.error_message ? `
+                            <div class="error-message">
+                                <strong>Error:</strong> ${job.error_message}
+                            </div>
+                        ` : ''}
+                        
+                        ${job.output_files && job.output_files.length > 0 ? `
+                            <div class="download-links">
+                                ${job.output_files.map(file => `
+                                    <a href="/api/jobs/${job.id}/download/${encodeURIComponent(file)}" 
+                                       class="btn btn-secondary download-link">
+                                        Download ${file.split('/').pop()}
+                                    </a>
+                                `).join('')}
+                            </div>
+                        ` : ''}
+                    </div>
+                `).join('');
+                
+            } catch (error) {
+                document.getElementById('jobsList').innerHTML = 
+                    '<div class="error-message">Failed to load jobs: ' + error.message + '</div>';
+            }
+        }
+
+        // Auto-refresh jobs
+        function startAutoRefresh() {
+            refreshTimer = setInterval(loadJobs, REFRESH_INTERVAL);
+        }
+
+        function stopAutoRefresh() {
+            if (refreshTimer) {
+                clearInterval(refreshTimer);
+            }
+        }
+
+        // Page visibility handling
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                stopAutoRefresh();
+            } else {
+                loadJobs();
+                startAutoRefresh();
+            }
+        });
+
+        // Initial load
+        loadJobs();
+        startAutoRefresh();
+    </script>
+</body>
+</html>
