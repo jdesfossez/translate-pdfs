@@ -36,6 +36,7 @@
 - Verify Redis URL in environment variables
 - Check if worker process is actually running
 - Restart the container: `docker compose restart`
+- Use deployment script: `./deploy.sh` for guided setup
 
 ### 2. Container Build Issues
 
