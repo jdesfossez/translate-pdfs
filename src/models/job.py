@@ -6,13 +6,48 @@ from pathlib import Path
 from typing import Optional
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import Column, DateTime, Enum as SQLEnum, String, Text
-from sqlalchemy.dialects.postgresql import UUID as PGUUID
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import declarative_base
+from sqlalchemy.types import TypeDecorator, CHAR
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
 
 Base = declarative_base()
+
+
+class GUID(TypeDecorator):
+    """Platform-independent GUID type.
+
+    Uses PostgreSQL's UUID type, otherwise uses CHAR(36), storing as stringified hex values.
+    """
+    impl = CHAR
+    cache_ok = True
+
+    def load_dialect_impl(self, dialect):
+        if dialect.name == 'postgresql':
+            return dialect.type_descriptor(UUID())
+        else:
+            return dialect.type_descriptor(CHAR(36))
+
+    def process_bind_param(self, value, dialect):
+        if value is None:
+            return value
+        elif dialect.name == 'postgresql':
+            return str(value)
+        else:
+            if not isinstance(value, UUID):
+                return str(UUID(value))
+            else:
+                return str(value)
+
+    def process_result_value(self, value, dialect):
+        if value is None:
+            return value
+        else:
+            if not isinstance(value, UUID):
+                return UUID(value)
+            return value
 
 
 class DocumentType(str, Enum):
@@ -60,15 +95,25 @@ class JobResponse(BaseModel):
     error_message: Optional[str] = None
     output_files: list[str] = Field(default_factory=list)
 
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True, "arbitrary_types_allowed": True}
+
+    @field_validator('id', mode='before')
+    @classmethod
+    def validate_id(cls, v):
+        """Convert any UUID-like value to standard UUID."""
+        if isinstance(v, UUID):
+            return v
+        if isinstance(v, str):
+            return UUID(v)
+        # Handle SQLAlchemy UUID types
+        return UUID(str(v))
 
 
 class Job(Base):
     """SQLAlchemy model for jobs."""
     __tablename__ = "jobs"
 
-    id = Column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid4()))
     filename = Column(String(255), nullable=False)
     document_type = Column(SQLEnum(DocumentType), nullable=False)
     status = Column(SQLEnum(JobStatus), nullable=False, default=JobStatus.PENDING)
@@ -88,9 +133,14 @@ class Job(Base):
                 output_files = json.loads(self.output_files)
             except json.JSONDecodeError:
                 pass
-        
+
+        # Ensure UUID is properly converted
+        job_id = self.id
+        if not isinstance(job_id, UUID):
+            job_id = UUID(str(job_id))
+
         return JobResponse(
-            id=self.id,
+            id=job_id,
             filename=self.filename,
             document_type=self.document_type,
             status=self.status,

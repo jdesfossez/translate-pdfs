@@ -85,7 +85,7 @@ class TestJobsAPI:
         
         # Create a test job
         job = Job(
-            id=uuid.uuid4(),
+            id=str(uuid.uuid4()),
             filename="test.pdf",
             document_type=DocumentType.TEXT_PDF,
             status=JobStatus.PENDING
@@ -104,7 +104,7 @@ class TestJobsAPI:
         """Test getting a specific job."""
         from src.models.job import Job
         
-        job_id = uuid.uuid4()
+        job_id = str(uuid.uuid4())
         job = Job(
             id=job_id,
             filename="test.pdf",
@@ -123,7 +123,7 @@ class TestJobsAPI:
     
     def test_get_job_not_found(self, client):
         """Test getting a non-existent job."""
-        job_id = uuid.uuid4()
+        job_id = str(uuid.uuid4())
         response = client.get(f"/api/jobs/{job_id}")
         assert response.status_code == 404
         assert "Job not found" in response.json()["detail"]
@@ -132,7 +132,7 @@ class TestJobsAPI:
         """Test cancelling a job."""
         from src.models.job import Job
         
-        job_id = uuid.uuid4()
+        job_id = str(uuid.uuid4())
         job = Job(
             id=job_id,
             filename="test.pdf",
@@ -151,7 +151,7 @@ class TestJobsAPI:
     
     def test_cancel_job_not_found(self, client):
         """Test cancelling a non-existent job."""
-        job_id = uuid.uuid4()
+        job_id = str(uuid.uuid4())
         response = client.delete(f"/api/jobs/{job_id}")
         assert response.status_code == 404
         assert "Job not found" in response.json()["detail"]
@@ -160,7 +160,7 @@ class TestJobsAPI:
         """Test cancelling a completed job."""
         from src.models.job import Job
         
-        job_id = uuid.uuid4()
+        job_id = str(uuid.uuid4())
         job = Job(
             id=job_id,
             filename="test.pdf",
@@ -176,7 +176,7 @@ class TestJobsAPI:
     
     def test_download_file_not_found(self, client):
         """Test downloading from a non-existent job."""
-        job_id = uuid.uuid4()
+        job_id = str(uuid.uuid4())
         response = client.get(f"/api/jobs/{job_id}/download/test.pdf")
         assert response.status_code == 404
         assert "Job not found" in response.json()["detail"]
@@ -185,7 +185,7 @@ class TestJobsAPI:
         """Test downloading from an incomplete job."""
         from src.models.job import Job
         
-        job_id = uuid.uuid4()
+        job_id = str(uuid.uuid4())
         job = Job(
             id=job_id,
             filename="test.pdf",
