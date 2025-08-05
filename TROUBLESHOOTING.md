@@ -36,6 +36,7 @@
 - Verify Redis URL in environment variables
 - Check if worker process is actually running
 - Restart the container: `docker compose restart`
+- Use deployment script: `./deploy.sh` for guided setup
 
 ### 2. Container Build Issues
 
@@ -223,6 +224,24 @@ export PDF_TRANSLATE_MAX_TOKENS_PER_BATCH=64000
 export PDF_TRANSLATE_MODEL_NAME=facebook/nllb-200-3.3B
 ```
 
+## Quick Setup
+
+### Using the Deployment Script (Recommended)
+
+```bash
+# Make script executable
+chmod +x deploy.sh
+
+# Run guided deployment
+./deploy.sh
+```
+
+The deployment script will:
+- Create `.env` file from template
+- Check system requirements
+- Guide you through deployment options
+- Handle directory creation and permissions
+
 ## Getting Help
 
 1. **Check logs first:**
@@ -235,7 +254,12 @@ export PDF_TRANSLATE_MODEL_NAME=facebook/nllb-200-3.3B
    docker exec -it translate-pdfs-pdf-translator-1 python3 /app/startup_debug.py
    ```
 
-3. **Create issue with:**
+3. **Use deployment script for guided setup:**
+   ```bash
+   ./deploy.sh
+   ```
+
+4. **Create issue with:**
    - Docker version: `docker --version`
    - Compose version: `docker compose version`
    - System info: `uname -a`

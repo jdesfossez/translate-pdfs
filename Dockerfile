@@ -14,8 +14,7 @@ RUN apt-get update && apt-get install -y \
     wget \
     git \
     software-properties-common \
-    netcat \
-    su-exec \
+    netcat-traditional \
     # OCR dependencies
     tesseract-ocr \
     tesseract-ocr-eng \

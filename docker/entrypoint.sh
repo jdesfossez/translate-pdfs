@@ -8,7 +8,7 @@ wait_for_service() {
     local service_name=$3
 
     echo "Waiting for $service_name to be ready..."
-    while ! nc -z $host $port; do
+    while ! nc.traditional -z $host $port; do
         sleep 1
     done
     echo "$service_name is ready!"
@@ -43,15 +43,15 @@ case "$1" in
         echo "🔍 Testing worker startup..."
         python3 /app/test_worker_startup.py
         echo "🚀 Starting worker..."
-        exec su-exec appuser python3 -m src.workers.translation_worker
+        exec su -c "python3 -m src.workers.translation_worker" appuser
         ;;
     web)
         echo "Starting web server only..."
-        exec su-exec appuser python3 main.py
+        exec su -c "python3 main.py" appuser
         ;;
     test)
         echo "Running tests..."
-        exec su-exec appuser python3 run_tests.py
+        exec su -c "python3 run_tests.py" appuser
         ;;
     debug)
         echo "Running debug checks..."
