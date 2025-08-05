@@ -1,5 +1,5 @@
-# Production Docker Compose configuration
-# Use: docker compose -f docker-compose.prod.yml up -d
+# Debug Docker Compose configuration
+# Use: docker compose -f docker-compose.debug.yml up
 
 services:
   pdf-translator:
@@ -23,16 +23,10 @@ services:
       - PDF_TRANSLATE_DATABASE_URL=sqlite:///./data/jobs.db
       - PDF_TRANSLATE_MODEL_NAME=facebook/mbart-large-50-many-to-many-mmt
       - PDF_TRANSLATE_USE_SAFETENSORS=true
-      - PDF_TRANSLATE_CPU_LOAD_THEN_GPU=true
-      - PDF_TRANSLATE_MAX_TOKENS_PER_BATCH=64000
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
+      - PDF_TRANSLATE_CPU_LOAD_THEN_GPU=false
+      - PDF_TRANSLATE_MAX_TOKENS_PER_BATCH=32000
     restart: unless-stopped
+    command: ["debug"]  # Start in debug mode
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/health"]
       interval: 30s

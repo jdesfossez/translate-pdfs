@@ -164,12 +164,29 @@ if __name__ == "__main__":
     """Run the worker process."""
     import redis
     from rq import Worker
-    
-    # Connect to Redis
-    redis_conn = redis.from_url(settings.redis_url)
-    
-    # Create worker
-    worker = Worker([settings.queue_name], connection=redis_conn)
-    
-    logger.info(f"Starting worker for queue: {settings.queue_name}")
-    worker.work()
+
+    logger.info(f"Worker starting...")
+    logger.info(f"Redis URL: {settings.redis_url}")
+    logger.info(f"Queue name: {settings.queue_name}")
+
+    try:
+        # Connect to Redis
+        logger.info("Connecting to Redis...")
+        redis_conn = redis.from_url(settings.redis_url)
+        redis_conn.ping()
+        logger.info("✅ Redis connection successful")
+
+        # Create worker
+        logger.info(f"Creating worker for queue: {settings.queue_name}")
+        worker = Worker([settings.queue_name], connection=redis_conn)
+        logger.info(f"✅ Worker created: {worker.name}")
+
+        # Start working
+        logger.info(f"🚀 Starting worker for queue: {settings.queue_name}")
+        worker.work(with_scheduler=True)
+
+    except Exception as e:
+        logger.error(f"❌ Worker failed to start: {e}")
+        import traceback
+        traceback.print_exc()
+        raise
