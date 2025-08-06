@@ -15,26 +15,37 @@ def check_environment():
     print("=== Environment Variables ===")
     env_vars = [
         'PDF_TRANSLATE_REDIS_URL',
-        'PDF_TRANSLATE_DATABASE_URL', 
+        'PDF_TRANSLATE_DATABASE_URL',
         'PDF_TRANSLATE_MODEL_NAME',
         'PDF_TRANSLATE_DEBUG',
         'PYTHONPATH'
     ]
-    
+
+    all_good = True
     for var in env_vars:
         value = os.environ.get(var, 'NOT SET')
         print(f"{var}: {value}")
+        # Only PYTHONPATH is optional, others are required
+        if var != 'PYTHONPATH' and value == 'NOT SET':
+            all_good = False
+
+    return all_good
 
 def check_directories():
     """Check required directories."""
     print("\n=== Directory Check ===")
     dirs = ['/app', '/app/uploads', '/app/outputs', '/app/logs', '/app/data']
-    
+
+    all_good = True
     for dir_path in dirs:
         path = Path(dir_path)
         exists = path.exists()
         writable = path.is_dir() and os.access(path, os.W_OK) if exists else False
         print(f"{dir_path}: {'✅' if exists else '❌'} exists, {'✅' if writable else '❌'} writable")
+        if not exists or not writable:
+            all_good = False
+
+    return all_good
 
 def check_redis():
     """Check Redis connectivity."""
@@ -48,13 +59,19 @@ def check_redis():
         redis_conn.ping()
         print(f"✅ Redis connection successful: {settings.redis_url}")
         
-        # Check if Redis is running locally
+        # Check if Redis is running via the configured URL
         try:
-            local_redis = redis.Redis(host='redis', port=6379, db=0)
-            local_redis.ping()
-            print("✅ Local Redis (redis:6379) is running")
+            # Parse the Redis URL to get the host
+            import urllib.parse
+            parsed = urllib.parse.urlparse(settings.redis_url)
+            host = parsed.hostname or 'localhost'
+            port = parsed.port or 6379
+
+            test_redis = redis.Redis(host=host, port=port, db=0)
+            test_redis.ping()
+            print(f"✅ Redis service ({host}:{port}) is running")
         except:
-            print("❌ Local Redis (redis:6379) not accessible")
+            print(f"❌ Redis service ({host}:{port}) not accessible")
             
         return True
     except Exception as e:
