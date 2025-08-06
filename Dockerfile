@@ -36,15 +36,12 @@ RUN apt-get update && apt-get install -y \
     # Cleanup
     && rm -rf /var/lib/apt/lists/*
 
-# Install latest Docling from source (if needed)
-RUN pip3 install --no-cache-dir docling
-
 # Install Python dependencies
 COPY requirements.txt /tmp/requirements.txt
 RUN pip3 install --no-cache-dir -r /tmp/requirements.txt
 
-# Ensure docling is installed (critical for document processing)
-RUN pip3 install --no-cache-dir docling>=1.0.0
+# Ensure docling and its dependencies are properly installed
+RUN pip3 install --no-cache-dir docling>=1.0.0 docling-core>=1.7.0 docling-parse>=4.1.0
 
 # Create app user and directories
 RUN useradd -m -u 1000 appuser && \
