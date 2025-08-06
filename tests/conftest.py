@@ -26,7 +26,7 @@ def test_settings():
             upload_dir=temp_path / "uploads",
             output_dir=temp_path / "outputs", 
             database_url=f"sqlite:///{temp_path}/test.db",
-            redis_url="redis://localhost:6379/15",  # Use test database
+            redis_url="redis://redis:6379/15",  # Use test database
             model_name="facebook/mbart-large-50-many-to-many-mmt",  # Smaller model for tests
             max_file_size=10 * 1024 * 1024,  # 10MB for tests
         )

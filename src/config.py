@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     cleanup_after_hours: int = Field(default=24, description="Hours to keep files before cleanup")
     
     # Queue
-    redis_url: str = Field(default="redis://localhost:6379/0", description="Redis URL for queue")
+    redis_url: str = Field(default="redis://redis:6379/0", description="Redis URL for queue")
     queue_name: str = Field(default="pdf_translation", description="Queue name")
     
     # Database

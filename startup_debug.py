@@ -50,11 +50,11 @@ def check_redis():
         
         # Check if Redis is running locally
         try:
-            local_redis = redis.Redis(host='localhost', port=6379, db=0)
+            local_redis = redis.Redis(host='redis', port=6379, db=0)
             local_redis.ping()
-            print("✅ Local Redis (localhost:6379) is running")
+            print("✅ Local Redis (redis:6379) is running")
         except:
-            print("❌ Local Redis (localhost:6379) not accessible")
+            print("❌ Local Redis (redis:6379) not accessible")
             
         return True
     except Exception as e:
