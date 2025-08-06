@@ -32,20 +32,21 @@ def process_translation_job(job_data: dict) -> dict:
     Returns:
         Dictionary with processing results
     """
-    job_id = uuid.UUID(job_data["job_id"])
+    job_id_str = job_data["job_id"]  # Keep as string for database query
+    job_id = uuid.UUID(job_id_str)  # Convert to UUID for logging/processing
     file_path = Path(job_data["file_path"])
     document_type = DocumentType(job_data["document_type"])
-    
+
     logger.info(f"Starting job processing: {job_id}")
-    
+
     # Get database session
     db = SessionLocal()
-    
+
     try:
-        # Get job from database
-        job = db.query(Job).filter(Job.id == job_id).first()
+        # Get job from database using string ID
+        job = db.query(Job).filter(Job.id == job_id_str).first()
         if not job:
-            raise Exception(f"Job not found: {job_id}")
+            raise Exception(f"Job not found: {job_id_str}")
         
         # Update job status
         job.status = JobStatus.PROCESSING
