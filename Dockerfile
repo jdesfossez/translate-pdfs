@@ -43,6 +43,9 @@ RUN pip3 install --no-cache-dir docling
 COPY requirements.txt /tmp/requirements.txt
 RUN pip3 install --no-cache-dir -r /tmp/requirements.txt
 
+# Ensure docling is installed (critical for document processing)
+RUN pip3 install --no-cache-dir docling>=1.0.0
+
 # Create app user and directories
 RUN useradd -m -u 1000 appuser && \
     mkdir -p /app /app/uploads /app/outputs /app/logs /app/data \

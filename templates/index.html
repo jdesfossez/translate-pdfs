@@ -101,8 +101,17 @@
                     return;
                 }
                 
-                jobsList.innerHTML = jobs.map(job => `
-                    <div class="job-card">
+                jobsList.innerHTML = `
+                    <div class="bulk-actions">
+                        <button onclick="cancelAllPending()" class="btn btn-danger btn-small">
+                            Cancel All Pending
+                        </button>
+                        <button onclick="loadJobs()" class="btn btn-secondary btn-small">
+                            Refresh
+                        </button>
+                    </div>
+                ` + jobs.map(job => `
+                    <div class="job-card" data-job-id="${job.id}">
                         <div class="job-header">
                             <div class="job-title">${job.filename}</div>
                             <div class="status-badge status-${job.status}">${job.status}</div>
@@ -125,16 +134,32 @@
                             </div>
                         ` : ''}
                         
-                        ${job.output_files && job.output_files.length > 0 ? `
-                            <div class="download-links">
-                                ${job.output_files.map(file => `
-                                    <a href="/api/jobs/${job.id}/download/${encodeURIComponent(file)}" 
-                                       class="btn btn-secondary download-link">
-                                        Download ${file.split('/').pop()}
-                                    </a>
-                                `).join('')}
-                            </div>
-                        ` : ''}
+                        <div class="job-actions">
+                            ${job.output_files && job.output_files.length > 0 ? `
+                                <div class="download-links">
+                                    ${job.output_files.map(file => `
+                                        <a href="/api/jobs/${job.id}/download/${encodeURIComponent(file)}"
+                                           class="btn btn-secondary download-link">
+                                            Download ${file.split('/').pop()}
+                                        </a>
+                                    `).join('')}
+                                </div>
+                            ` : ''}
+
+                            ${job.status === 'pending' || job.status === 'processing' ? `
+                                <button onclick="cancelJob('${job.id}')"
+                                        class="btn btn-danger cancel-btn">
+                                    Cancel Job
+                                </button>
+                            ` : ''}
+
+                            ${job.status === 'failed' ? `
+                                <button onclick="retryJob('${job.id}')"
+                                        class="btn btn-warning retry-btn">
+                                    Retry Job
+                                </button>
+                            ` : ''}
+                        </div>
                     </div>
                 `).join('');
                 
@@ -164,6 +189,85 @@
                 startAutoRefresh();
             }
         });
+
+        // Cancel job function
+        async function cancelJob(jobId) {
+            if (!confirm('Are you sure you want to cancel this job?')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/jobs/${jobId}`, {
+                    method: 'DELETE'
+                });
+
+                if (response.ok) {
+                    showMessage('Job cancelled successfully', 'success');
+                    loadJobs(); // Refresh job list
+                } else {
+                    const error = await response.json();
+                    showMessage('Failed to cancel job: ' + (error.detail || 'Unknown error'), 'error');
+                }
+            } catch (error) {
+                showMessage('Failed to cancel job: ' + error.message, 'error');
+            }
+        }
+
+        // Retry job function
+        async function retryJob(jobId) {
+            if (!confirm('Are you sure you want to retry this job?')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/jobs/${jobId}/retry`, {
+                    method: 'POST'
+                });
+
+                if (response.ok) {
+                    showMessage('Job queued for retry', 'success');
+                    loadJobs(); // Refresh job list
+                } else {
+                    const error = await response.json();
+                    showMessage('Failed to retry job: ' + (error.detail || 'Unknown error'), 'error');
+                }
+            } catch (error) {
+                showMessage('Failed to retry job: ' + error.message, 'error');
+            }
+        }
+
+        // Show message function
+        function showMessage(message, type = 'info') {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message message-${type}`;
+            messageDiv.textContent = message;
+
+            // Insert at top of page
+            document.body.insertBefore(messageDiv, document.body.firstChild);
+
+            // Auto-remove after 5 seconds
+            setTimeout(() => {
+                if (messageDiv.parentNode) {
+                    messageDiv.parentNode.removeChild(messageDiv);
+                }
+            }, 5000);
+        }
+
+        // Bulk operations
+        function cancelAllPending() {
+            if (!confirm('Are you sure you want to cancel all pending jobs?')) {
+                return;
+            }
+
+            // Get all pending jobs and cancel them
+            const pendingJobs = document.querySelectorAll('.job-card .status-pending, .job-card .status-processing');
+            pendingJobs.forEach(jobCard => {
+                const jobId = jobCard.closest('.job-card').dataset.jobId;
+                if (jobId) {
+                    cancelJob(jobId);
+                }
+            });
+        }
 
         // Initial load
         loadJobs();

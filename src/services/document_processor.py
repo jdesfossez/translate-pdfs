@@ -130,7 +130,8 @@ class DocumentProcessor:
         cmd = [
             "ocrmypdf",
             "--language", self.settings.ocr_language,
-            "--skip-text"  # Don't OCR pages that already have text
+            "--output-type", "pdf",  # Avoid Ghostscript to prevent version 10.0.0 issues
+            "--force-ocr"  # Use force-ocr instead of skip-text to avoid Ghostscript regressions
         ]
         
         if document_type == DocumentType.SCAN:

@@ -164,10 +164,23 @@ cleanup() {
 
     # Stop and remove containers
     docker compose -f docker-compose.prod.yml down --remove-orphans
-    
-    # Remove old images
+
+    # Remove old images (including dangling and unused)
+    log_info "Removing dangling images..."
     docker image prune -f
-    
+
+    # Remove unused images (more aggressive cleanup)
+    log_info "Removing unused images..."
+    docker image prune -a -f --filter "until=24h"
+
+    # Remove unused volumes
+    log_info "Removing unused volumes..."
+    docker volume prune -f
+
+    # Remove unused networks
+    log_info "Removing unused networks..."
+    docker network prune -f
+
     log_info "Cleanup completed"
 }
 

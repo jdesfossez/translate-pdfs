@@ -37,7 +37,9 @@ class TestDocumentProcessor:
         # Check that basic OCR command was used
         cmd = mock_run.call_args[0][0]
         assert "ocrmypdf" in cmd
-        assert "--skip-text" in cmd
+        assert "--force-ocr" in cmd  # Updated to use force-ocr instead of skip-text
+        assert "--output-type" in cmd  # Added to avoid Ghostscript issues
+        assert "pdf" in cmd  # The output type value
         assert "--rotate-pages" not in cmd  # Not for text image PDFs
     
     @patch('subprocess.run')
