@@ -172,8 +172,9 @@ class JobRecoveryService:
             job.error_message = None
             
             # Re-queue the job
+            import uuid
             self.job_service.queue_job(
-                job_id=job.id,
+                job_id=uuid.UUID(job.id),
                 file_path=f"uploads/{job.id}/{job.filename}",
                 document_type=job.document_type
             )
