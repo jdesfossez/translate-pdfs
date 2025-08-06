@@ -48,10 +48,22 @@ class Settings(BaseSettings):
     
     # OCR
     ocr_language: str = Field(default="eng", description="OCR language")
-    
+
+    # Logging
+    log_level: str = Field(default="INFO", description="Logging level")
+
+    # Translation languages
+    source_language: str = Field(default="auto", description="Source language for translation")
+    target_language: str = Field(default="fr_XX", description="Target language for translation")
+
+    # GPU/NVIDIA settings (optional, for Docker environments)
+    nvidia_visible_devices: Optional[str] = Field(default=None, description="NVIDIA visible devices")
+    nvidia_driver_capabilities: Optional[str] = Field(default=None, description="NVIDIA driver capabilities")
+
     class Config:
         env_file = ".env"
         env_prefix = "PDF_TRANSLATE_"
+        extra = "ignore"  # Allow extra environment variables
 
 
 # Global settings instance
