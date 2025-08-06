@@ -23,7 +23,7 @@ router = APIRouter()
 class HealthResponse(BaseModel):
     """Health check response model."""
     status: str
-    timestamp: datetime
+    timestamp: str  # Use string instead of datetime for JSON serialization
     gpu_available: bool
     gpu_count: int
     version: str = "1.0.0"
@@ -38,7 +38,7 @@ async def health_check():
 
     health_status = HealthResponse(
         status="healthy",
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.utcnow().isoformat(),
         gpu_available=torch.cuda.is_available(),
         gpu_count=torch.cuda.device_count() if torch.cuda.is_available() else 0
     )
@@ -90,7 +90,7 @@ async def health_check():
         health_status.status = "unhealthy"
 
     if health_status.status == "unhealthy":
-        raise HTTPException(status_code=503, detail=health_status.dict())
+        raise HTTPException(status_code=503, detail=health_status.model_dump())
 
     return health_status
 
