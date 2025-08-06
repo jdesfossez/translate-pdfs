@@ -40,8 +40,7 @@ services:
       - PDF_TRANSLATE_CPU_LOAD_THEN_GPU=true
       - PDF_TRANSLATE_MAX_TOKENS_PER_BATCH=64000
     depends_on:
-      redis:
-        condition: service_healthy
+      - redis
     deploy:
       resources:
         reservations:
@@ -77,8 +76,7 @@ services:
       - PDF_TRANSLATE_CPU_LOAD_THEN_GPU=true
       - PDF_TRANSLATE_MAX_TOKENS_PER_BATCH=64000
     depends_on:
-      redis:
-        condition: service_healthy
+      - redis
     deploy:
       resources:
         reservations:

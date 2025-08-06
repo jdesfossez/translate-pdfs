@@ -39,8 +39,7 @@ services:
       - PDF_TRANSLATE_CPU_LOAD_THEN_GPU=false
       - PDF_TRANSLATE_MAX_TOKENS_PER_BATCH=32000
     depends_on:
-      redis:
-        condition: service_healthy
+      - redis
     restart: unless-stopped
     command: ["debug"]  # Start in debug mode
     healthcheck:

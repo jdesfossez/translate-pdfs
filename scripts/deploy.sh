@@ -96,15 +96,60 @@ deploy() {
         log_warn "Please review and update .env file with your settings"
     fi
     
-    # Start the service
-    docker compose -f docker-compose.prod.yml up -d
-    
-    if [ $? -eq 0 ]; then
+    # Start Redis first
+    log_info "Starting Redis..."
+    docker compose -f docker-compose.prod.yml up -d redis
+
+    # Wait for Redis to be ready
+    log_info "Waiting for Redis to be ready..."
+    for i in {1..30}; do
+        if docker compose -f docker-compose.prod.yml exec -T redis redis-cli ping >/dev/null 2>&1; then
+            log_info "Redis is ready"
+            break
+        fi
+        if [ $i -eq 30 ]; then
+            log_error "Redis failed to start within 30 seconds"
+            docker compose -f docker-compose.prod.yml logs redis
+            exit 1
+        fi
+        sleep 1
+    done
+
+    # Start the main application
+    log_info "Starting PDF Translator application..."
+    docker compose -f docker-compose.prod.yml up -d pdf-translator
+
+    # Wait for application to be ready
+    log_info "Waiting for application to be ready..."
+    for i in {1..60}; do
+        if curl -f http://localhost/health >/dev/null 2>&1; then
+            log_info "Application is ready"
+            break
+        fi
+        if [ $i -eq 60 ]; then
+            log_warn "Application health check timeout, but continuing..."
+            break
+        fi
+        sleep 2
+    done
+
+    # Start the worker
+    log_info "Starting worker..."
+    docker compose -f docker-compose.prod.yml up -d worker
+
+    # Final status check
+    if docker compose -f docker-compose.prod.yml ps | grep -q "Up"; then
         log_info "Service deployed successfully"
         log_info "Access the service at: http://localhost"
         log_info "API documentation at: http://localhost/docs"
+
+        # Show service status
+        echo ""
+        log_info "Service Status:"
+        docker compose -f docker-compose.prod.yml ps
     else
         log_error "Failed to deploy service"
+        docker compose -f docker-compose.prod.yml logs
         exit 1
     fi
 }
@@ -119,12 +164,47 @@ stop() {
     log_info "Service stopped"
 }
 
+# Restart the service
+restart() {
+    log_info "Restarting PDF Translation Service..."
+    stop
+    sleep 2
+    deploy
+}
+
 # Show service status
 status() {
     log_info "Service Status:"
     cd "$PROJECT_DIR"
 
+    echo "📋 Container Status:"
     docker compose -f docker-compose.prod.yml ps
+
+    echo ""
+    echo "📋 Redis Health:"
+    if docker compose -f docker-compose.prod.yml exec -T redis redis-cli ping >/dev/null 2>&1; then
+        echo "✅ Redis: Healthy"
+    else
+        echo "❌ Redis: Unhealthy"
+    fi
+
+    echo ""
+    echo "📋 Application Health:"
+    if curl -f http://localhost/health >/dev/null 2>&1; then
+        echo "✅ Application: Healthy"
+        curl -s http://localhost/health | jq '.' 2>/dev/null || curl -s http://localhost/health
+    else
+        echo "❌ Application: Unhealthy"
+    fi
+
+    echo ""
+    echo "📋 Worker Status:"
+    WORKER_LOGS=$(docker compose -f docker-compose.prod.yml logs --tail=5 worker 2>/dev/null)
+    if echo "$WORKER_LOGS" | grep -q "Starting worker"; then
+        echo "✅ Worker: Running"
+    else
+        echo "❌ Worker: Not running or no recent activity"
+    fi
 }
 
 # Show service logs
@@ -195,6 +275,7 @@ show_help() {
     echo "  test      Run tests in container"
     echo "  deploy    Deploy the service"
     echo "  stop      Stop the service"
+    echo "  restart   Restart the service"
     echo "  status    Show service status"
     echo "  logs      Show service logs (optionally specify service name)"
     echo "  update    Update and redeploy the service"
@@ -229,6 +310,10 @@ main() {
         stop)
             check_docker
             stop
+            ;;
+        restart)
+            check_docker
+            restart
             ;;
         status)
             check_docker
