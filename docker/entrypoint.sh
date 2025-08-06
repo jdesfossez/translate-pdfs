@@ -31,7 +31,11 @@ chown -R appuser:appuser /app/uploads /app/outputs /app/logs /app/data
 
 # Create supervisor log directory
 mkdir -p /var/log/supervisor
-chown -R appuser:appuser /var/log/supervisor
+chown -R root:root /var/log/supervisor
+
+# Ensure Redis can write to data directory
+chmod 755 /app/data
+chown -R appuser:appuser /app/data
 
 case "$1" in
     app)
