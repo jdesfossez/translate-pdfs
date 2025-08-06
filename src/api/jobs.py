@@ -5,7 +5,7 @@ import uuid
 from pathlib import Path
 from typing import List
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, Request
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
@@ -13,52 +13,77 @@ from src.config import get_settings
 from src.database import get_db
 from src.models.job import Job, JobCreate, JobResponse, DocumentType, JobStatus
 from src.services.job_service import JobService
+from src.utils.security import validate_upload_file, secure_path_join, upload_rate_limiter, check_disk_space
+from src.utils.logging_config import StructuredLogger
 
 logger = logging.getLogger(__name__)
+structured_logger = StructuredLogger(__name__)
 
 router = APIRouter()
 
 
 @router.post("/jobs")
 async def create_job(
+    request: Request,
     file: UploadFile = File(...),
     document_type: DocumentType = Form(...),
     db: Session = Depends(get_db)
 ):
-    """Create a new translation job."""
+    """Create a new translation job with enhanced security validation."""
     settings = get_settings()
 
-    # Validate file
-    if not file.filename.lower().endswith('.pdf'):
-        raise HTTPException(status_code=400, detail="Only PDF files are supported")
+    # Rate limiting
+    client_ip = request.client.host
+    if not upload_rate_limiter.is_allowed(client_ip):
+        structured_logger.log_error("rate_limit_exceeded", f"Too many uploads from {client_ip}")
+        raise HTTPException(status_code=429, detail="Too many upload requests. Please try again later.")
 
-    # Read file content to check size
+    # Comprehensive file validation
     try:
-        content = await file.read()
+        sanitized_filename, content = validate_upload_file(file)
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Failed to read uploaded file: {e}")
-        raise HTTPException(status_code=500, detail="Failed to read file")
+        logger.error(f"File validation error: {e}")
+        raise HTTPException(status_code=500, detail="File validation failed")
 
-    # Check file size
-    if len(content) > settings.max_file_size:
-        raise HTTPException(status_code=400, detail="File too large")
+    # Check disk space (require 3x file size for processing)
+    required_space = len(content) * 3
+    if not check_disk_space(settings.upload_dir, required_space):
+        structured_logger.log_error("insufficient_disk_space", f"Required: {required_space} bytes")
+        raise HTTPException(status_code=507, detail="Insufficient disk space")
 
-    # Save uploaded file
+    # Create job ID and secure directories
     job_id = str(uuid.uuid4())
-    upload_path = settings.upload_dir / job_id / file.filename
-    upload_path.parent.mkdir(parents=True, exist_ok=True)
 
     try:
+        # Use secure path joining to prevent directory traversal
+        upload_dir = secure_path_join(settings.upload_dir, job_id)
+        upload_dir.mkdir(parents=True, exist_ok=True)
+
+        # Save uploaded file with sanitized filename
+        upload_path = secure_path_join(upload_dir, sanitized_filename)
+
         upload_path.write_bytes(content)
+
+        structured_logger.log_job_event(
+            job_id, "file_uploaded",
+            filename=sanitized_filename,
+            size=len(content),
+            client_ip=client_ip
+        )
+
         logger.info(f"Uploaded file saved: {upload_path}")
+
     except Exception as e:
         logger.error(f"Failed to save uploaded file: {e}")
+        structured_logger.log_error("file_save_failed", str(e), job_id=job_id)
         raise HTTPException(status_code=500, detail="Failed to save file")
     
     # Create job record
     job = Job(
         id=job_id,
-        filename=file.filename,
+        filename=sanitized_filename,  # Use sanitized filename
         document_type=document_type,
         status=JobStatus.PENDING
     )
@@ -160,6 +185,42 @@ async def cancel_job(job_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail="Failed to cancel job")
     
     return {"message": "Job cancelled"}
+
+
+@router.post("/jobs/{job_id}/retry")
+async def retry_job(job_id: str, db: Session = Depends(get_db)):
+    """Retry a failed job."""
+    job = db.query(Job).filter(Job.id == job_id).first()
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    if job.status not in [JobStatus.FAILED, JobStatus.CANCELLED]:
+        raise HTTPException(status_code=400, detail="Only failed or cancelled jobs can be retried")
+
+    # Reset job status and re-queue
+    job_service = JobService()
+    try:
+        # Reset job status
+        job.status = JobStatus.PENDING
+        job.stage = ProcessingStage.QUEUED
+        job.progress = "0.0"
+        job.error_message = None
+
+        # Re-queue the job
+        job_service.queue_job(
+            uuid.UUID(job_id),
+            f"uploads/{job_id}/{job.filename}",
+            job.document_type
+        )
+
+        db.commit()
+        logger.info(f"Job retried: {job_id}")
+
+    except Exception as e:
+        logger.error(f"Failed to retry job: {e}")
+        raise HTTPException(status_code=500, detail="Failed to retry job")
+
+    return {"message": "Job queued for retry"}
 
 
 @router.get("/jobs/{job_id}/download/{filename}")

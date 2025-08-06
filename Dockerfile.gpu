@@ -40,12 +40,12 @@ RUN apt-get update && apt-get install -y \
     # Cleanup
     && rm -rf /var/lib/apt/lists/*
 
-# Install latest Docling from source (if needed)
-RUN pip3 install --no-cache-dir docling
-
-# Install Python dependencies
+# Install Python dependencies first
 COPY requirements.txt /tmp/requirements.txt
 RUN pip3 install --no-cache-dir -r /tmp/requirements.txt
+
+# Ensure docling is installed (critical for document processing)
+RUN pip3 install --no-cache-dir docling>=1.0.0
 
 # Create non-root user
 RUN useradd -m -u 1000 appuser && \

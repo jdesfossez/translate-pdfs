@@ -58,15 +58,29 @@ app.include_router(jobs_router, prefix="/api", tags=["jobs"])
 async def startup_event():
     """Initialize application on startup."""
     logger.info("Starting PDF Translation Service...")
-    
+
     # Ensure directories exist
     ensure_directories()
     Path("logs").mkdir(exist_ok=True)
     Path("data").mkdir(exist_ok=True)
-    
+
     # Create database tables
     create_tables()
-    
+
+    # Run job recovery in background
+    from src.services.job_recovery import run_recovery_on_startup
+
+    def run_recovery():
+        try:
+            run_recovery_on_startup()
+        except Exception as e:
+            logger.error(f"Job recovery failed: {e}")
+
+    # Run recovery in background thread to avoid blocking startup
+    import threading
+    recovery_thread = threading.Thread(target=run_recovery, daemon=True)
+    recovery_thread.start()
+
     logger.info("Application startup complete")
 
 
