@@ -3,6 +3,20 @@
 # Requires: NVIDIA Docker runtime
 
 services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
   pdf-translator:
     build: 
       context: .
@@ -20,7 +34,7 @@ services:
       - PDF_TRANSLATE_DEBUG=false
       - PDF_TRANSLATE_HOST=0.0.0.0
       - PDF_TRANSLATE_PORT=8000
-      - PDF_TRANSLATE_REDIS_URL=redis://localhost:6379/0
+      - PDF_TRANSLATE_REDIS_URL=redis://redis:6379/0
       - PDF_TRANSLATE_DATABASE_URL=sqlite:///./data/jobs.db
       - PDF_TRANSLATE_MODEL_NAME=facebook/nllb-200-3.3B
       - PDF_TRANSLATE_MODEL_REVISION=refs/pr/17
@@ -29,6 +43,9 @@ services:
       - PDF_TRANSLATE_MAX_TOKENS_PER_BATCH=64000
       - NVIDIA_VISIBLE_DEVICES=all
       - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+    depends_on:
+      redis:
+        condition: service_healthy
     deploy:
       resources:
         reservations:
@@ -45,5 +62,7 @@ services:
       start_period: 120s
 
 volumes:
+  redis_data:
+    driver: local
   model_cache:
     driver: local

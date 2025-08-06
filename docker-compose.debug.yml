@@ -2,6 +2,19 @@
 # Use: docker compose -f docker-compose.debug.yml up
 
 services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   pdf-translator:
     build: 
       context: .
@@ -19,12 +32,15 @@ services:
       - PDF_TRANSLATE_DEBUG=true
       - PDF_TRANSLATE_HOST=0.0.0.0
       - PDF_TRANSLATE_PORT=8000
-      - PDF_TRANSLATE_REDIS_URL=redis://localhost:6379/0
+      - PDF_TRANSLATE_REDIS_URL=redis://redis:6379/0
       - PDF_TRANSLATE_DATABASE_URL=sqlite:///./data/jobs.db
       - PDF_TRANSLATE_MODEL_NAME=facebook/mbart-large-50-many-to-many-mmt
       - PDF_TRANSLATE_USE_SAFETENSORS=true
       - PDF_TRANSLATE_CPU_LOAD_THEN_GPU=false
       - PDF_TRANSLATE_MAX_TOKENS_PER_BATCH=32000
+    depends_on:
+      redis:
+        condition: service_healthy
     restart: unless-stopped
     command: ["debug"]  # Start in debug mode
     healthcheck:
@@ -35,5 +51,7 @@ services:
       start_period: 120s
 
 volumes:
+  redis_data:
+    driver: local
   model_cache:
     driver: local
