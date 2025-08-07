@@ -174,10 +174,9 @@ class DocumentProcessor:
 
         try:
             # Import docling components
-            from docling.document_converter import DocumentConverter
+            from docling.document_converter import DocumentConverter, PdfFormatOption
             from docling.datamodel.base_models import InputFormat
             from docling.datamodel.pipeline_options import PdfPipelineOptions
-            from docling.backend.pypdfium2_backend import PyPdfiumDocumentBackend
 
             # Configure pipeline options
             pipeline_options = PdfPipelineOptions()
@@ -185,10 +184,10 @@ class DocumentProcessor:
             pipeline_options.do_table_structure = True
             pipeline_options.table_structure_options.do_cell_matching = True
 
-            # Create converter with configuration
+            # Create converter with configuration using the new API
             converter = DocumentConverter(
                 format_options={
-                    InputFormat.PDF: pipeline_options,
+                    InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options),
                 }
             )
 
