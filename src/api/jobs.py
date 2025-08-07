@@ -1,5 +1,6 @@
 """Job management API endpoints."""
 
+import json
 import logging
 import uuid
 from pathlib import Path
@@ -20,6 +21,17 @@ logger = logging.getLogger(__name__)
 structured_logger = StructuredLogger(__name__)
 
 router = APIRouter()
+
+
+def _parse_output_files(output_files_str: str) -> list:
+    """Parse output files JSON string with error handling."""
+    if not output_files_str:
+        return []
+    try:
+        return json.loads(output_files_str)
+    except json.JSONDecodeError:
+        # Fallback to comma-separated for backward compatibility
+        return output_files_str.split(',') if output_files_str else []
 
 
 @router.post("/jobs")
@@ -136,7 +148,7 @@ async def list_jobs(db: Session = Depends(get_db)):
             "created_at": job.created_at.isoformat(),
             "updated_at": job.updated_at.isoformat(),
             "error_message": job.error_message,
-            "output_files": job.output_files.split(',') if job.output_files else []
+            "output_files": _parse_output_files(job.output_files)
         }
         for job in jobs
     ]
@@ -159,7 +171,7 @@ async def get_job(job_id: str, db: Session = Depends(get_db)):
         "created_at": job.created_at.isoformat(),
         "updated_at": job.updated_at.isoformat(),
         "error_message": job.error_message,
-        "output_files": job.output_files.split(',') if job.output_files else []
+        "output_files": _parse_output_files(job.output_files)
     }
 
 
@@ -223,7 +235,7 @@ async def retry_job(job_id: str, db: Session = Depends(get_db)):
     return {"message": "Job queued for retry"}
 
 
-@router.get("/jobs/{job_id}/download/{filename}")
+@router.get("/jobs/{job_id}/download/{filename:path}")
 async def download_file(job_id: str, filename: str, db: Session = Depends(get_db)):
     """Download a job output file."""
     settings = get_settings()
@@ -234,15 +246,32 @@ async def download_file(job_id: str, filename: str, db: Session = Depends(get_db
     if job.status != JobStatus.COMPLETED:
         raise HTTPException(status_code=400, detail="Job not completed")
 
+    # Verify the file is in the output_files list for security
+    output_files = _parse_output_files(job.output_files)
+    if filename not in output_files:
+        raise HTTPException(status_code=404, detail="File not found in job outputs")
+
     # Find the file
     output_dir = settings.output_dir / job_id  # job_id is already a string
     file_path = output_dir / filename
-    
+
+    # Security check: ensure the resolved path is within the output directory
+    try:
+        file_path = file_path.resolve()
+        output_dir = output_dir.resolve()
+        if not str(file_path).startswith(str(output_dir)):
+            raise HTTPException(status_code=403, detail="Access denied")
+    except Exception:
+        raise HTTPException(status_code=404, detail="File not found")
+
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="File not found")
-    
+
+    # Extract just the filename for the download
+    download_filename = Path(filename).name
+
     return FileResponse(
         path=file_path,
-        filename=filename,
+        filename=download_filename,
         media_type='application/octet-stream'
     )

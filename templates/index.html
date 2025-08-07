@@ -138,7 +138,7 @@
                             ${job.output_files && job.output_files.length > 0 ? `
                                 <div class="download-links">
                                     ${job.output_files.map(file => `
-                                        <a href="/api/jobs/${job.id}/download/${encodeURIComponent(file)}"
+                                        <a href="/api/jobs/${job.id}/download/${file.split('/').map(segment => encodeURIComponent(segment)).join('/')}"
                                            class="btn btn-secondary download-link">
                                             Download ${file.split('/').pop()}
                                         </a>
