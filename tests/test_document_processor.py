@@ -94,34 +94,36 @@ class TestDocumentProcessor:
         with pytest.raises(DocumentProcessingError, match="OCR processing timed out"):
             processor._run_ocr(input_path, work_dir, DocumentType.SCAN)
     
-    @patch('subprocess.run')
-    def test_run_docling_success(self, mock_run, tmp_path):
-        """Test successful Docling conversion."""
-        mock_run.return_value.returncode = 0
-        mock_run.return_value.stderr = ""
-        
+    @patch('src.services.document_processor.DocumentConverter')
+    def test_run_docling_success(self, mock_converter_class, tmp_path):
+        """Test successful Docling conversion using Python API."""
+        # Mock the converter and result
+        mock_converter = Mock()
+        mock_converter_class.return_value = mock_converter
+
+        mock_result = Mock()
+        mock_document = Mock()
+        mock_document.export_to_markdown.return_value = "# Test Document\n\nThis is a test."
+        mock_result.document = mock_document
+        mock_converter.convert.return_value = mock_result
+
         processor = DocumentProcessor()
         input_path = tmp_path / "input.pdf"
         input_path.write_bytes(b"fake pdf")
         work_dir = tmp_path / "work"
         work_dir.mkdir()
-        
-        # Create expected output file
-        output_dir = work_dir / "docling_output"
-        output_dir.mkdir(parents=True)
-        md_file = output_dir / "input.md"
-        md_file.write_text("# Test Document")
-        
+
         result = processor._run_docling(input_path, work_dir)
-        
-        assert result == md_file
-        mock_run.assert_called_once()
-        
-        # Check command
-        cmd = mock_run.call_args[0][0]
-        assert "docling" in cmd
-        assert "--pdf-backend" in cmd
-        assert "dlparse_v4" in cmd
+
+        # Check that the markdown file was created
+        expected_path = work_dir / "docling_output" / "input.md"
+        assert result == expected_path
+        assert result.exists()
+        assert "# Test Document" in result.read_text()
+
+        # Verify converter was called correctly
+        mock_converter_class.assert_called_once()
+        mock_converter.convert.assert_called_once_with(str(input_path))
     
     @patch('subprocess.run')
     def test_run_docling_no_output(self, mock_run, tmp_path):

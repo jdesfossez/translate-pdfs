@@ -12,7 +12,9 @@ alembic==1.12.1
 
 # Document Processing
 ocrmypdf==16.10.4
-docling==1.0.0
+docling>=1.0.0
+docling-core>=1.7.0
+docling-parse>=4.1.0
 pandoc==2.3
 
 # Translation & ML
