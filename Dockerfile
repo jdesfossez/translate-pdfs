@@ -36,12 +36,13 @@ RUN apt-get update && apt-get install -y \
     # Cleanup
     && rm -rf /var/lib/apt/lists/*
 
+RUN pip install --index-url https://download.pytorch.org/whl/cu124 torch==2.5.1 torchvision torchaudio
 # Install Python dependencies
 COPY requirements.txt /tmp/requirements.txt
 RUN pip3 install --no-cache-dir -r /tmp/requirements.txt
 
 # Ensure docling and its dependencies are properly installed
-RUN pip3 install --no-cache-dir docling>=1.0.0 docling-core>=1.7.0 docling-parse>=4.1.0
+RUN pip3 install --no-cache-dir docling
 
 # Create app user and directories
 RUN useradd -m -u 1000 appuser && \

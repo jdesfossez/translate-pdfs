@@ -45,7 +45,7 @@ COPY requirements.txt /tmp/requirements.txt
 RUN pip3 install --no-cache-dir -r /tmp/requirements.txt
 
 # Ensure docling and its dependencies are properly installed
-RUN pip3 install --no-cache-dir docling>=1.0.0 docling-core>=1.7.0 docling-parse>=4.1.0
+RUN pip3 install --no-cache-dir docling
 
 # Create non-root user
 RUN useradd -m -u 1000 appuser && \

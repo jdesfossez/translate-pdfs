@@ -29,15 +29,16 @@ services:
       - ./data:/app/data
       - model_cache:/home/appuser/.cache
     environment:
-      - PDF_TRANSLATE_DEBUG=true
-      - PDF_TRANSLATE_HOST=0.0.0.0
-      - PDF_TRANSLATE_PORT=8000
       - PDF_TRANSLATE_REDIS_URL=redis://redis:6379/0
       - PDF_TRANSLATE_DATABASE_URL=sqlite:///./data/jobs.db
-      - PDF_TRANSLATE_MODEL_NAME=facebook/mbart-large-50-many-to-many-mmt
+      - PDF_TRANSLATE_MODEL_NAME=facebook/nllb-200-3.3B
+      - PDF_TRANSLATE_MODEL_REVISION=refs/pr/17
       - PDF_TRANSLATE_USE_SAFETENSORS=true
-      - PDF_TRANSLATE_CPU_LOAD_THEN_GPU=false
-      - PDF_TRANSLATE_MAX_TOKENS_PER_BATCH=32000
+      - PDF_TRANSLATE_CPU_LOAD_THEN_GPU=true
+      - PDF_TRANSLATE_MAX_TOKENS_PER_BATCH=64000
+      - PDF_TRANSLATE_MAX_INPUT_TOKENS=950
+      - PDF_TRANSLATE_MAX_NEW_TOKENS=400
+      - PDF_TRANSLATE_NUM_BEAMS=1
     depends_on:
       - redis
     restart: unless-stopped

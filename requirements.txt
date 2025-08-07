@@ -12,13 +12,11 @@ alembic==1.12.1
 
 # Document Processing
 ocrmypdf==16.10.4
-docling>=1.0.0
-docling-core>=1.7.0
-docling-parse>=4.1.0
+docling
 pandoc==2.3
 
 # Translation & ML
-torch>=2.1.0
+torch==2.5.1
 transformers>=4.35.0
 accelerate>=0.24.0
 huggingface-hub>=0.19.0

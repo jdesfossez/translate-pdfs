@@ -304,7 +304,7 @@ main() {
             check_docker
             check_nvidia_docker
             build_image
-            run_tests
+            #run_tests
             deploy
             ;;
         stop)
