@@ -10,21 +10,21 @@ def test_docling_import():
         print("🔍 Testing docling imports...")
         
         # Test basic imports
-        from docling.document_converter import DocumentConverter
+        from docling.document_converter import DocumentConverter, PdfFormatOption
         from docling.datamodel.base_models import InputFormat
         from docling.datamodel.pipeline_options import PdfPipelineOptions
         print("✅ Basic docling imports successful")
-        
+
         # Test pipeline options
         pipeline_options = PdfPipelineOptions()
         pipeline_options.do_ocr = False
         pipeline_options.do_table_structure = True
         print("✅ Pipeline options configuration successful")
-        
+
         # Test converter creation
         converter = DocumentConverter(
             format_options={
-                InputFormat.PDF: pipeline_options,
+                InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options),
             }
         )
         print("✅ DocumentConverter creation successful")
