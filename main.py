@@ -10,7 +10,7 @@ from pathlib import Path
 import uvicorn
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
+
 
 from src.api.jobs import router as jobs_router
 from src.api.health import router as health_router
@@ -45,9 +45,6 @@ app = FastAPI(
 
 # Mount static files
 app.mount("/static", StaticFiles(directory="static"), name="static")
-
-# Setup templates
-templates = Jinja2Templates(directory="templates")
 
 # Include routers
 app.include_router(health_router, prefix="/health", tags=["health"])
@@ -93,9 +90,8 @@ async def shutdown_event():
 @app.get("/")
 async def root():
     """Serve the main page."""
-    from fastapi import Request
     from fastapi.responses import HTMLResponse
-    
+
     # This is a simple redirect to serve the static HTML
     # In a real implementation, you'd use templates.TemplateResponse
     with open("templates/index.html", "r") as f:
