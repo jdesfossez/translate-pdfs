@@ -91,9 +91,11 @@ class TestJobsAPI:
         assert response.status_code == 400
         assert "File extension not allowed. Allowed: .pdf" in response.json()["detail"]
 
-    def test_create_job_file_too_large(self, client, test_settings):
+    def test_create_job_file_too_large(self, client, test_settings, sample_pdf_content):
         """Test job creation with file too large."""
-        large_content = b"x" * (test_settings.max_file_size + 1)
+        # Create a large file with valid PDF content at the beginning
+        padding_size = test_settings.max_file_size + 1 - len(sample_pdf_content)
+        large_content = sample_pdf_content + b"x" * padding_size
         files = {"file": ("large.pdf", io.BytesIO(large_content), "application/pdf")}
         data = {"document_type": DocumentType.TEXT_PDF.value}
 

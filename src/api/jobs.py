@@ -58,7 +58,7 @@ async def create_job(
 
     # Comprehensive file validation
     try:
-        sanitized_filename, content = validate_upload_file(file)
+        sanitized_filename, content = validate_upload_file(file, settings.max_file_size)
     except HTTPException:
         raise
     except Exception as e:
