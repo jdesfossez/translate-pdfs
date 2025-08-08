@@ -9,8 +9,9 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from src.config import get_settings
-from src.models.job import Job, JobStatus, ProcessingStage, DocumentType
-from src.services.document_processor import DocumentProcessor, DocumentProcessingError
+from src.models.job import DocumentType, Job, JobStatus, ProcessingStage
+from src.services.document_processor import (DocumentProcessingError,
+                                             DocumentProcessor)
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -25,10 +26,10 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 def process_translation_job(job_data: dict) -> dict:
     """
     Process a translation job.
-    
+
     Args:
         job_data: Dictionary containing job_id, file_path, and document_type
-    
+
     Returns:
         Dictionary with processing results
     """
@@ -47,17 +48,17 @@ def process_translation_job(job_data: dict) -> dict:
         job = db.query(Job).filter(Job.id == job_id_str).first()
         if not job:
             raise Exception(f"Job not found: {job_id_str}")
-        
+
         # Update job status
         job.status = JobStatus.PROCESSING
         job.stage = ProcessingStage.UPLOADED
         job.progress = "0.0"
         db.commit()
-        
+
         # Create output directory
         output_dir = settings.output_dir / str(job_id)
         output_dir.mkdir(parents=True, exist_ok=True)
-        
+
         # Progress callback to update database
         def update_progress(progress: float, stage_description: str = None):
             try:
@@ -66,46 +67,51 @@ def process_translation_job(job_data: dict) -> dict:
                     # Map stage description to enum
                     if "OCR" in stage_description:
                         job.stage = ProcessingStage.OCR_PROCESSING
-                    elif "Markdown" in stage_description or "Converting" in stage_description:
+                    elif (
+                        "Markdown" in stage_description
+                        or "Converting" in stage_description
+                    ):
                         job.stage = ProcessingStage.DOCLING_CONVERSION
-                    elif "Translating" in stage_description or "Translation" in stage_description:
+                    elif (
+                        "Translating" in stage_description
+                        or "Translation" in stage_description
+                    ):
                         job.stage = ProcessingStage.TRANSLATION
                     elif "PDF" in stage_description:
                         job.stage = ProcessingStage.PDF_GENERATION
                     elif "completed" in stage_description.lower():
                         job.stage = ProcessingStage.COMPLETED
-                
+
                 db.commit()
-                logger.info(f"Job {job_id} progress: {progress:.1f}% - {stage_description}")
+                logger.info(
+                    f"Job {job_id} progress: {progress:.1f}% - {stage_description}"
+                )
             except Exception as e:
                 logger.error(f"Failed to update progress: {e}")
-        
+
         # Process the document
         processor = DocumentProcessor()
         final_pdf_path = processor.process_pdf(
-            file_path, 
-            output_dir, 
-            document_type,
-            progress_callback=update_progress
+            file_path, output_dir, document_type, progress_callback=update_progress
         )
-        
+
         # Collect output files
         output_files = []
-        
+
         # Add the final PDF
         if final_pdf_path.exists():
             output_files.append(str(final_pdf_path.relative_to(output_dir)))
-        
+
         # Add markdown files
         for md_file in output_dir.glob("**/*.md"):
             if md_file.is_file():
                 output_files.append(str(md_file.relative_to(output_dir)))
-        
+
         # Add HTML files if any
         for html_file in output_dir.glob("**/*.html"):
             if html_file.is_file():
                 output_files.append(str(html_file.relative_to(output_dir)))
-        
+
         # Update job as completed
         job.status = JobStatus.COMPLETED
         job.stage = ProcessingStage.COMPLETED
@@ -113,36 +119,32 @@ def process_translation_job(job_data: dict) -> dict:
         job.output_files = json.dumps(output_files)
         job.error_message = None
         db.commit()
-        
+
         # Cleanup work files
         processor.cleanup_work_files(output_dir / "work")
-        
+
         logger.info(f"Job completed successfully: {job_id}")
-        
+
         return {
             "job_id": str(job_id),
             "status": "completed",
             "output_files": output_files,
-            "final_pdf": str(final_pdf_path) if final_pdf_path.exists() else None
+            "final_pdf": str(final_pdf_path) if final_pdf_path.exists() else None,
         }
-        
+
     except DocumentProcessingError as e:
         logger.error(f"Document processing failed for job {job_id}: {e}")
-        
+
         # Update job as failed
         job.status = JobStatus.FAILED
         job.error_message = str(e)
         db.commit()
-        
-        return {
-            "job_id": str(job_id),
-            "status": "failed",
-            "error": str(e)
-        }
-        
+
+        return {"job_id": str(job_id), "status": "failed", "error": str(e)}
+
     except Exception as e:
         logger.error(f"Unexpected error processing job {job_id}: {e}")
-        
+
         # Update job as failed
         try:
             job.status = JobStatus.FAILED
@@ -150,13 +152,9 @@ def process_translation_job(job_data: dict) -> dict:
             db.commit()
         except Exception as db_error:
             logger.error(f"Failed to update job status: {db_error}")
-        
-        return {
-            "job_id": str(job_id),
-            "status": "failed",
-            "error": str(e)
-        }
-        
+
+        return {"job_id": str(job_id), "status": "failed", "error": str(e)}
+
     finally:
         db.close()
 
@@ -189,5 +187,6 @@ if __name__ == "__main__":
     except Exception as e:
         logger.error(f"❌ Worker failed to start: {e}")
         import traceback
+
         traceback.print_exc()
         raise

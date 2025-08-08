@@ -4,7 +4,7 @@ import logging
 import os
 import shutil
 from datetime import datetime
-from typing import Dict, Any
+from typing import Any, Dict
 
 import redis
 import torch
@@ -22,6 +22,7 @@ router = APIRouter()
 
 class HealthResponse(BaseModel):
     """Health check response model."""
+
     status: str
     timestamp: str  # Use string instead of datetime for JSON serialization
     gpu_available: bool
@@ -40,7 +41,7 @@ async def health_check():
         status="healthy",
         timestamp=datetime.utcnow().isoformat(),
         gpu_available=torch.cuda.is_available(),
-        gpu_count=torch.cuda.device_count() if torch.cuda.is_available() else 0
+        gpu_count=torch.cuda.device_count() if torch.cuda.is_available() else 0,
     )
 
     # Check database
@@ -73,7 +74,7 @@ async def health_check():
 
         health_status.metrics["disk_space"] = {
             "upload_dir_free_gb": round(upload_free_gb, 2),
-            "output_dir_free_gb": round(output_free_gb, 2)
+            "output_dir_free_gb": round(output_free_gb, 2),
         }
 
         # Alert if less than 1GB free
@@ -112,7 +113,9 @@ async def readiness_check():
 
     except Exception as e:
         logger.error(f"Readiness check failed: {e}")
-        raise HTTPException(status_code=503, detail={"status": "not ready", "error": str(e)})
+        raise HTTPException(
+            status_code=503, detail={"status": "not ready", "error": str(e)}
+        )
 
 
 @router.get("/live")

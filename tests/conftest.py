@@ -20,21 +20,21 @@ def test_settings():
     """Test settings with temporary directories."""
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_path = Path(temp_dir)
-        
+
         settings = Settings(
             debug=True,
             upload_dir=temp_path / "uploads",
-            output_dir=temp_path / "outputs", 
+            output_dir=temp_path / "outputs",
             database_url=f"sqlite:///{temp_path}/test.db",
             redis_url="redis://redis:6379/15",  # Use test database
             model_name="facebook/mbart-large-50-many-to-many-mmt",  # Smaller model for tests
             max_file_size=10 * 1024 * 1024,  # 10MB for tests
         )
-        
+
         # Create directories
         settings.upload_dir.mkdir(parents=True, exist_ok=True)
         settings.output_dir.mkdir(parents=True, exist_ok=True)
-        
+
         yield settings
 
 
@@ -43,9 +43,9 @@ def test_db(test_settings):
     """Test database session."""
     engine = create_engine(test_settings.database_url, echo=False)
     Base.metadata.create_all(bind=engine)
-    
+
     TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-    
+
     session = TestingSessionLocal()
     try:
         yield session
@@ -58,18 +58,19 @@ def test_db(test_settings):
 def client(test_settings, test_db):
     """Test client with dependency overrides."""
     from main import app
-    
+
     # Override settings
     app.dependency_overrides[get_db] = lambda: test_db
-    
+
     # Mock the settings
-    import src.config
     import src.api.jobs
+    import src.config
+
     original_get_settings = src.config.get_settings
     src.config.get_settings = lambda: test_settings
     # Also override in the jobs module
     src.api.jobs.get_settings = lambda: test_settings
-    
+
     try:
         with TestClient(app) as test_client:
             yield test_client
@@ -194,6 +195,7 @@ Another paragraph with a [link](https://example.com) and an image:
 @pytest.fixture(autouse=True)
 def mock_external_tools(monkeypatch):
     """Mock external tools (OCR, Docling, Pandoc) for testing."""
+
     def mock_subprocess_run(*args, **kwargs):
         mock_result = Mock()
         mock_result.returncode = 0
@@ -231,6 +233,6 @@ def mock_job_service():
         "failed_count": 0,
         "finished_count": 0,
         "started_count": 0,
-        "deferred_count": 0
+        "deferred_count": 0,
     }
     return mock_service

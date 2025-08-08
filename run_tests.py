@@ -8,15 +8,15 @@ import sys
 from pathlib import Path
 
 
-def run_tests():
+def run_tests(with_coverage=False):
     """Run the test suite."""
     print("Running PDF Translation Service Tests")
     print("=" * 50)
-    
+
     # Ensure we're in the right directory
     project_root = Path(__file__).parent
-    
-    # Run pytest with coverage
+
+    # Run pytest with optional coverage
     cmd = [
         sys.executable, "-m", "pytest",
         "tests/",
@@ -24,6 +24,13 @@ def run_tests():
         "--tb=short",
         "-x",  # Stop on first failure
     ]
+
+    if with_coverage:
+        cmd.extend([
+            "--cov=src",
+            "--cov-report=html",
+            "--cov-report=term-missing"
+        ])
     
     try:
         result = subprocess.run(cmd, cwd=project_root, check=False)
@@ -61,15 +68,16 @@ def run_linting():
 
 if __name__ == "__main__":
     import argparse
-    
+
     parser = argparse.ArgumentParser(description="Run tests for PDF Translation Service")
     parser.add_argument("--lint", action="store_true", help="Run linting checks")
+    parser.add_argument("--coverage", action="store_true", help="Run tests with coverage reporting")
     parser.add_argument("--no-gpu", action="store_true", help="Skip GPU tests")
-    
+
     args = parser.parse_args()
-    
+
     if args.lint:
         run_linting()
-    
-    exit_code = run_tests()
+
+    exit_code = run_tests(with_coverage=args.coverage)
     sys.exit(exit_code)
