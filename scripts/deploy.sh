@@ -68,15 +68,50 @@ build_image() {
 # Run tests in container
 run_tests() {
     log_info "Running tests in container..."
-    
+
+    # Run tests in CI mode to mock external dependencies like Redis
     docker run --rm \
+        -e CI=true \
+        -e PDF_TRANSLATE_DATABASE_URL=sqlite:///./test.db \
         -v "$PROJECT_DIR:/app" \
         pdf-translator:latest test
-    
+
     if [ $? -eq 0 ]; then
         log_info "Tests passed"
     else
         log_error "Tests failed"
+        exit 1
+    fi
+}
+
+# Run tests with Redis service (comprehensive testing)
+run_tests_with_redis() {
+    log_info "Running comprehensive tests with Redis service..."
+
+    # Start Redis service temporarily
+    docker run -d --name test-redis -p 6379:6379 redis:7-alpine
+
+    # Wait for Redis to be ready
+    sleep 3
+
+    # Run tests with Redis available
+    docker run --rm \
+        -e PDF_TRANSLATE_REDIS_URL=redis://host.docker.internal:6379/15 \
+        -e PDF_TRANSLATE_DATABASE_URL=sqlite:///./test.db \
+        --add-host host.docker.internal:host-gateway \
+        -v "$PROJECT_DIR:/app" \
+        pdf-translator:latest test
+
+    local test_result=$?
+
+    # Clean up Redis container
+    docker stop test-redis >/dev/null 2>&1
+    docker rm test-redis >/dev/null 2>&1
+
+    if [ $test_result -eq 0 ]; then
+        log_info "Comprehensive tests passed"
+    else
+        log_error "Comprehensive tests failed"
         exit 1
     fi
 }
@@ -272,7 +307,8 @@ show_help() {
     echo ""
     echo "Commands:"
     echo "  build     Build the Docker image"
-    echo "  test      Run tests in container"
+    echo "  test      Run tests in container (CI mode, mocked dependencies)"
+    echo "  test-full Run comprehensive tests with Redis service"
     echo "  deploy    Deploy the service"
     echo "  stop      Stop the service"
     echo "  restart   Restart the service"
@@ -284,6 +320,8 @@ show_help() {
     echo ""
     echo "Examples:"
     echo "  $0 deploy          # Deploy the service"
+    echo "  $0 test            # Run tests (CI mode)"
+    echo "  $0 test-full       # Run comprehensive tests with Redis"
     echo "  $0 logs worker     # Show worker logs"
     echo "  $0 update          # Update and redeploy"
 }
@@ -299,6 +337,11 @@ main() {
             check_docker
             build_image
             run_tests
+            ;;
+        test-full)
+            check_docker
+            build_image
+            run_tests_with_redis
             ;;
         deploy)
             check_docker
