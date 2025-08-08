@@ -108,6 +108,8 @@ class TestDocumentProcessor:
         mock_document.export_to_markdown.return_value = (
             "# Test Document\n\nThis is a test."
         )
+        # Mock pictures as an empty list to avoid len() issues
+        mock_document.pictures = []
         mock_result.document = mock_document
         mock_converter.convert.return_value = mock_result
 
@@ -129,11 +131,27 @@ class TestDocumentProcessor:
         mock_converter_class.assert_called_once()
         mock_converter.convert.assert_called_once_with(str(input_path))
 
-    @patch("subprocess.run")
-    def test_run_docling_no_output(self, mock_run, tmp_path):
-        """Test Docling with no output file."""
-        mock_run.return_value.returncode = 0
-        mock_run.return_value.stderr = ""
+    @patch("docling.document_converter.DocumentConverter")
+    def test_run_docling_with_images(self, mock_converter_class, tmp_path):
+        """Test Docling conversion with image export."""
+        # Mock the converter and result with images
+        mock_converter = Mock()
+        mock_converter_class.return_value = mock_converter
+
+        # Mock picture with image
+        mock_picture = Mock()
+        mock_image = Mock()
+        mock_picture.image = mock_image
+
+        mock_result = Mock()
+        mock_document = Mock()
+        mock_document.export_to_markdown.return_value = (
+            "# Test Document\n\n![Image](image_1.png)"
+        )
+        # Mock pictures as a list with one picture
+        mock_document.pictures = [mock_picture]
+        mock_result.document = mock_document
+        mock_converter.convert.return_value = mock_result
 
         processor = DocumentProcessor()
         input_path = tmp_path / "input.pdf"
@@ -141,7 +159,48 @@ class TestDocumentProcessor:
         work_dir = tmp_path / "work"
         work_dir.mkdir()
 
-        with pytest.raises(DocumentProcessingError, match="No markdown file generated"):
+        result = processor._run_docling(input_path, work_dir)
+
+        # Check that the markdown file was created
+        expected_path = work_dir / "docling_output" / "input.md"
+        assert result == expected_path
+        assert result.exists()
+        assert "![Image](image_1.png)" in result.read_text()
+
+        # Verify image save was called
+        mock_image.save.assert_called_once()
+
+        # Verify converter was called correctly
+        mock_converter_class.assert_called_once()
+        mock_converter.convert.assert_called_once_with(str(input_path))
+
+    @patch("docling.document_converter.DocumentConverter")
+    def test_run_docling_failure(self, mock_converter_class, tmp_path):
+        """Test Docling conversion failure."""
+        # Mock the converter to raise an exception
+        mock_converter = Mock()
+        mock_converter_class.return_value = mock_converter
+        mock_converter.convert.side_effect = Exception("Conversion failed")
+
+        processor = DocumentProcessor()
+        input_path = tmp_path / "input.pdf"
+        input_path.write_bytes(b"fake pdf")
+        work_dir = tmp_path / "work"
+        work_dir.mkdir()
+
+        with pytest.raises(DocumentProcessingError, match="Docling conversion failed"):
+            processor._run_docling(input_path, work_dir)
+
+    @patch("docling.document_converter.DocumentConverter", side_effect=ImportError("No module named 'docling'"))
+    def test_run_docling_import_error(self, mock_converter_class, tmp_path):
+        """Test Docling import error handling."""
+        processor = DocumentProcessor()
+        input_path = tmp_path / "input.pdf"
+        input_path.write_bytes(b"fake pdf")
+        work_dir = tmp_path / "work"
+        work_dir.mkdir()
+
+        with pytest.raises(DocumentProcessingError, match="Docling import failed"):
             processor._run_docling(input_path, work_dir)
 
     @patch("subprocess.run")
