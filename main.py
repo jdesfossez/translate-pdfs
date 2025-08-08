@@ -11,10 +11,9 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
-
-from src.api.jobs import router as jobs_router
 from src.api.health import router as health_router
-from src.config import get_settings, ensure_directories
+from src.api.jobs import router as jobs_router
+from src.config import ensure_directories, get_settings
 from src.database import create_tables
 
 # Ensure logs directory exists
@@ -23,11 +22,11 @@ Path("logs").mkdir(exist_ok=True)
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     handlers=[
         logging.StreamHandler(sys.stdout),
-        logging.FileHandler('logs/app.log', mode='a')
-    ]
+        logging.FileHandler("logs/app.log", mode="a"),
+    ],
 )
 
 logger = logging.getLogger(__name__)
@@ -40,7 +39,7 @@ app = FastAPI(
     title="PDF Translation Service",
     description="Translate PDF documents from English to French using AI",
     version="1.0.0",
-    debug=settings.debug
+    debug=settings.debug,
 )
 
 # Mount static files
@@ -75,6 +74,7 @@ async def startup_event():
 
     # Run recovery in background thread to avoid blocking startup
     import threading
+
     recovery_thread = threading.Thread(target=run_recovery, daemon=True)
     recovery_thread.start()
 
@@ -105,5 +105,5 @@ if __name__ == "__main__":
         host=settings.host,
         port=settings.port,
         reload=settings.debug,
-        log_level="info" if not settings.debug else "debug"
+        log_level="info" if not settings.debug else "debug",
     )

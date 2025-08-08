@@ -6,16 +6,18 @@ import uuid
 from pathlib import Path
 from typing import List
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, Request
+from fastapi import (APIRouter, Depends, File, Form, HTTPException, Request,
+                     UploadFile)
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from src.config import get_settings
 from src.database import get_db
-from src.models.job import Job, JobCreate, JobResponse, DocumentType, JobStatus
+from src.models.job import DocumentType, Job, JobCreate, JobResponse, JobStatus
 from src.services.job_service import JobService
-from src.utils.security import validate_upload_file, secure_path_join, upload_rate_limiter, check_disk_space
 from src.utils.logging_config import StructuredLogger
+from src.utils.security import (check_disk_space, secure_path_join,
+                                upload_rate_limiter, validate_upload_file)
 
 logger = logging.getLogger(__name__)
 structured_logger = StructuredLogger(__name__)
@@ -31,7 +33,7 @@ def _parse_output_files(output_files_str: str) -> list:
         return json.loads(output_files_str)
     except json.JSONDecodeError:
         # Fallback to comma-separated for backward compatibility
-        return output_files_str.split(',') if output_files_str else []
+        return output_files_str.split(",") if output_files_str else []
 
 
 @router.post("/jobs")
@@ -39,7 +41,7 @@ async def create_job(
     request: Request,
     file: UploadFile = File(...),
     document_type: DocumentType = Form(...),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Create a new translation job with enhanced security validation."""
     settings = get_settings()
@@ -47,8 +49,12 @@ async def create_job(
     # Rate limiting
     client_ip = request.client.host
     if not upload_rate_limiter.is_allowed(client_ip):
-        structured_logger.log_error("rate_limit_exceeded", f"Too many uploads from {client_ip}")
-        raise HTTPException(status_code=429, detail="Too many upload requests. Please try again later.")
+        structured_logger.log_error(
+            "rate_limit_exceeded", f"Too many uploads from {client_ip}"
+        )
+        raise HTTPException(
+            status_code=429, detail="Too many upload requests. Please try again later."
+        )
 
     # Comprehensive file validation
     try:
@@ -62,7 +68,9 @@ async def create_job(
     # Check disk space (require 3x file size for processing)
     required_space = len(content) * 3
     if not check_disk_space(settings.upload_dir, required_space):
-        structured_logger.log_error("insufficient_disk_space", f"Required: {required_space} bytes")
+        structured_logger.log_error(
+            "insufficient_disk_space", f"Required: {required_space} bytes"
+        )
         raise HTTPException(status_code=507, detail="Insufficient disk space")
 
     # Create job ID and secure directories
@@ -79,10 +87,11 @@ async def create_job(
         upload_path.write_bytes(content)
 
         structured_logger.log_job_event(
-            job_id, "file_uploaded",
+            job_id,
+            "file_uploaded",
             filename=sanitized_filename,
             size=len(content),
-            client_ip=client_ip
+            client_ip=client_ip,
         )
 
         logger.info(f"Uploaded file saved: {upload_path}")
@@ -91,19 +100,19 @@ async def create_job(
         logger.error(f"Failed to save uploaded file: {e}")
         structured_logger.log_error("file_save_failed", str(e), job_id=job_id)
         raise HTTPException(status_code=500, detail="Failed to save file")
-    
+
     # Create job record
     job = Job(
         id=job_id,
         filename=sanitized_filename,  # Use sanitized filename
         document_type=document_type,
-        status=JobStatus.PENDING
+        status=JobStatus.PENDING,
     )
-    
+
     db.add(job)
     db.commit()
     db.refresh(job)
-    
+
     # Queue the job for processing
     job_service = JobService()
     try:
@@ -116,7 +125,7 @@ async def create_job(
         job.error_message = f"Failed to queue job: {e}"
         db.commit()
         raise HTTPException(status_code=500, detail="Failed to queue job")
-    
+
     # Return as dict to avoid Pydantic serialization issues
     response = job.to_response()
     return {
@@ -129,7 +138,7 @@ async def create_job(
         "created_at": response.created_at.isoformat(),
         "updated_at": response.updated_at.isoformat(),
         "error_message": response.error_message,
-        "output_files": response.output_files
+        "output_files": response.output_files,
     }
 
 
@@ -148,7 +157,7 @@ async def list_jobs(db: Session = Depends(get_db)):
             "created_at": job.created_at.isoformat(),
             "updated_at": job.updated_at.isoformat(),
             "error_message": job.error_message,
-            "output_files": _parse_output_files(job.output_files)
+            "output_files": _parse_output_files(job.output_files),
         }
         for job in jobs
     ]
@@ -171,7 +180,7 @@ async def get_job(job_id: str, db: Session = Depends(get_db)):
         "created_at": job.created_at.isoformat(),
         "updated_at": job.updated_at.isoformat(),
         "error_message": job.error_message,
-        "output_files": _parse_output_files(job.output_files)
+        "output_files": _parse_output_files(job.output_files),
     }
 
 
@@ -195,7 +204,7 @@ async def cancel_job(job_id: str, db: Session = Depends(get_db)):
     except Exception as e:
         logger.error(f"Failed to cancel job: {e}")
         raise HTTPException(status_code=500, detail="Failed to cancel job")
-    
+
     return {"message": "Job cancelled"}
 
 
@@ -207,7 +216,9 @@ async def retry_job(job_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Job not found")
 
     if job.status not in [JobStatus.FAILED, JobStatus.CANCELLED]:
-        raise HTTPException(status_code=400, detail="Only failed or cancelled jobs can be retried")
+        raise HTTPException(
+            status_code=400, detail="Only failed or cancelled jobs can be retried"
+        )
 
     # Reset job status and re-queue
     job_service = JobService()
@@ -220,9 +231,7 @@ async def retry_job(job_id: str, db: Session = Depends(get_db)):
 
         # Re-queue the job
         job_service.queue_job(
-            uuid.UUID(job_id),
-            f"uploads/{job_id}/{job.filename}",
-            job.document_type
+            uuid.UUID(job_id), f"uploads/{job_id}/{job.filename}", job.document_type
         )
 
         db.commit()
@@ -273,5 +282,5 @@ async def download_file(job_id: str, filename: str, db: Session = Depends(get_db
     return FileResponse(
         path=file_path,
         filename=download_filename,
-        media_type='application/octet-stream'
+        media_type="application/octet-stream",
     )

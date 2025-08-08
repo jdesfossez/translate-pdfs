@@ -7,11 +7,13 @@ from typing import Optional
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field, field_validator
-from sqlalchemy import Column, DateTime, Enum as SQLEnum, String, Text
-from sqlalchemy.orm import declarative_base
-from sqlalchemy.types import TypeDecorator, CHAR
+from sqlalchemy import Column, DateTime
+from sqlalchemy import Enum as SQLEnum
+from sqlalchemy import String, Text
 from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import declarative_base
 from sqlalchemy.sql import func
+from sqlalchemy.types import CHAR, TypeDecorator
 
 Base = declarative_base()
 

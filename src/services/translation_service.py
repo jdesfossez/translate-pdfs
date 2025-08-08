@@ -9,13 +9,13 @@ import math
 import platform
 import re
 from pathlib import Path
-from typing import List, Optional, Tuple, Iterable
+from typing import Iterable, List, Optional, Tuple
 
 import torch
 from accelerate import init_empty_weights, load_checkpoint_and_dispatch
 from huggingface_hub import snapshot_download
-from transformers import AutoTokenizer, AutoConfig, AutoModelForSeq2SeqLM
 from tqdm import tqdm
+from transformers import AutoConfig, AutoModelForSeq2SeqLM, AutoTokenizer
 
 from src.config import get_settings
 
@@ -35,24 +35,25 @@ IMG_LINK_RE = re.compile(r"!\[[^\]]*\]\(([^)]+)\)")
 
 class TranslationError(Exception):
     """Custom exception for translation errors."""
+
     pass
 
 
 class TranslationService:
     """GPU-accelerated translation service for markdown documents."""
-    
+
     def __init__(self):
         self.settings = get_settings()
         self.model_env = None
         self._model_loaded = False
-    
+
     def load_model(self) -> None:
         """Load the translation model and tokenizer."""
         if self._model_loaded:
             return
-            
+
         logger.info(f"Loading model: {self.settings.model_name}")
-        
+
         try:
             # Download model files
             repo_dir = snapshot_download(
@@ -60,36 +61,37 @@ class TranslationService:
                 revision=self.settings.model_revision,
                 allow_patterns=[
                     "config.json",
-                    "generation_config.json", 
+                    "generation_config.json",
                     "model.safetensors.index.json",
                     "model-*.safetensors",
                     "tokenizer.json",
                     "tokenizer_config.json",
                     "sentencepiece.bpe.model",
                     "special_tokens_map.json",
-                    "source.spm", "target.spm"
+                    "source.spm",
+                    "target.spm",
                 ],
                 ignore_patterns=["pytorch_model.bin.index.json", "*.bin", "*.pt"],
             )
-            
+
             # Load tokenizer and config
             tokenizer = AutoTokenizer.from_pretrained(repo_dir)
             config = AutoConfig.from_pretrained(repo_dir)
-            
+
             # Initialize model with empty weights
             with init_empty_weights():
                 model = AutoModelForSeq2SeqLM.from_config(config)
             model.tie_weights()
-            
+
             # Setup device and dtype
             device_map = {"": "cuda"} if torch.cuda.is_available() else {"": "cpu"}
             dtype = torch.bfloat16 if torch.cuda.is_available() else torch.float32
-            
+
             # Load checkpoint and dispatch to device
             model = load_checkpoint_and_dispatch(
                 model, checkpoint=repo_dir, device_map=device_map, dtype=dtype
             ).eval()
-            
+
             # Language setup
             if "nllb" in self.settings.model_name:
                 src_lang, tgt_lang = "eng_Latn", "fra_Latn"
@@ -104,15 +106,17 @@ class TranslationService:
                     tokenizer.src_lang = src_lang
                 forced_bos_id = tokenizer.lang_code_to_id[tgt_lang]
             else:
-                raise TranslationError("Unsupported model; use mBART-50 or NLLB-200 variants.")
-            
+                raise TranslationError(
+                    "Unsupported model; use mBART-50 or NLLB-200 variants."
+                )
+
             # Remove legacy flags
             try:
                 if hasattr(model.generation_config, "early_stopping"):
                     delattr(model.generation_config, "early_stopping")
             except Exception:
                 pass
-            
+
             self.model_env = {
                 "device": torch.device("cuda" if torch.cuda.is_available() else "cpu"),
                 "dtype": dtype,
@@ -123,15 +127,17 @@ class TranslationService:
                 "forced_bos_id": forced_bos_id,
                 "model_name": self.settings.model_name,
             }
-            
+
             self._model_loaded = True
             device_str = "cuda" if torch.cuda.is_available() else "cpu"
-            logger.info(f"Model loaded successfully on {device_str} | Arch: {platform.machine()}")
-            
+            logger.info(
+                f"Model loaded successfully on {device_str} | Arch: {platform.machine()}"
+            )
+
         except Exception as e:
             logger.error(f"Failed to load model: {e}")
             raise TranslationError(f"Model loading failed: {e}")
-    
+
     def unload_model(self) -> None:
         """Unload the model to free memory."""
         if self.model_env:
@@ -141,29 +147,31 @@ class TranslationService:
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
             logger.info("Model unloaded")
-    
+
     def count_tokens(self, text: str) -> int:
         """Count tokens in text."""
         if not self._model_loaded:
             raise TranslationError("Model not loaded")
-        
+
         tokenizer = self.model_env["tokenizer"]
-        return len(tokenizer(text, add_special_tokens=True, truncation=False)["input_ids"])
-    
+        return len(
+            tokenizer(text, add_special_tokens=True, truncation=False)["input_ids"]
+        )
+
     def chunk_by_tokens(self, text: str, max_tokens: int = None) -> List[str]:
         """Split text into chunks by token count."""
         if max_tokens is None:
             max_tokens = self.settings.max_input_tokens
-            
+
         if not self._model_loaded:
             raise TranslationError("Model not loaded")
-        
+
         tokenizer = self.model_env["tokenizer"]
-        
+
         # Simple sentence split
         sents = re.split(r"(?<=[\.\?!])\s+", text)
         chunks, buf, buf_tokens = [], [], 0
-        
+
         for s in sents:
             t = self.count_tokens(s)
             if t > max_tokens:
@@ -181,7 +189,7 @@ class TranslationService:
                 if cur:
                     chunks.append(" ".join(cur))
                 continue
-            
+
             if buf_tokens + t <= max_tokens:
                 buf.append(s)
                 buf_tokens += t
@@ -189,20 +197,29 @@ class TranslationService:
                 if buf:
                     chunks.append(" ".join(buf))
                 buf, buf_tokens = [s], t
-        
+
         if buf:
             chunks.append(" ".join(buf))
-        
+
         return chunks
 
-    def pack_by_token_budget(self, pieces: List[str], max_tokens_per_batch: int) -> List[List[str]]:
+    def pack_by_token_budget(
+        self, pieces: List[str], max_tokens_per_batch: int
+    ) -> List[List[str]]:
         """Pack text pieces into batches by token budget."""
         if not self._model_loaded:
             raise TranslationError("Model not loaded")
 
         tokenizer = self.model_env["tokenizer"]
-        lengths = [(p, len(tokenizer(p, add_special_tokens=True, truncation=False)["input_ids"]))
-                  for p in pieces]
+        lengths = [
+            (
+                p,
+                len(
+                    tokenizer(p, add_special_tokens=True, truncation=False)["input_ids"]
+                ),
+            )
+            for p in pieces
+        ]
         lengths.sort(key=lambda x: x[1], reverse=True)
 
         batches, cur_batch, cur_tokens = [], [], 0
@@ -224,8 +241,9 @@ class TranslationService:
         return batches
 
     @torch.inference_mode()
-    def translate_batch(self, texts: List[str], max_new_tokens: int = None,
-                       num_beams: int = None) -> List[str]:
+    def translate_batch(
+        self, texts: List[str], max_new_tokens: int = None, num_beams: int = None
+    ) -> List[str]:
         """Translate a batch of texts."""
         if not self._model_loaded:
             raise TranslationError("Model not loaded")
@@ -254,8 +272,10 @@ class TranslationService:
         encoded = {k: v.to(device) for k, v in encoded.items()}
 
         # Generate translations
-        with torch.autocast(device_type=device.type,
-                           dtype=self.model_env["dtype"] if device.type == "cuda" else torch.float32):
+        with torch.autocast(
+            device_type=device.type,
+            dtype=self.model_env["dtype"] if device.type == "cuda" else torch.float32,
+        ):
             generated = model.generate(
                 **encoded,
                 do_sample=False,
@@ -281,14 +301,18 @@ class TranslationService:
             translated_chunks: List[str] = []
 
             if self.settings.max_tokens_per_batch > 0:
-                batches = self.pack_by_token_budget(pieces, self.settings.max_tokens_per_batch)
+                batches = self.pack_by_token_budget(
+                    pieces, self.settings.max_tokens_per_batch
+                )
             else:
                 # Fallback: count-based batching
                 batches = list(self._batched(pieces, self.settings.batch_size))
 
             for batch in batches:
                 translated_chunks.extend(
-                    self.translate_batch(batch, self.settings.max_new_tokens, self.settings.num_beams)
+                    self.translate_batch(
+                        batch, self.settings.max_new_tokens, self.settings.num_beams
+                    )
                 )
 
             results.append(" ".join(translated_chunks))
@@ -328,8 +352,10 @@ class MarkdownProcessor:
     @staticmethod
     def restore_tokens(text: str, stash: List[str]) -> str:
         """Restore protected tokens."""
+
         def _restore(m: re.Match) -> str:
             return stash[int(m.group(1))]
+
         return PLACEHOLDER_RE.sub(_restore, text)
 
     @staticmethod
@@ -340,7 +366,7 @@ class MarkdownProcessor:
             raw = m.group(1).strip()
             if raw.startswith(("http://", "https://", "data:")):
                 continue
-            path_str = raw.strip(' \'"<>')
+            path_str = raw.strip(" '\"<>")
             src = (md_dir / path_str).resolve()
             if not src.exists() or not src.is_file():
                 continue
@@ -352,6 +378,7 @@ class MarkdownProcessor:
             try:
                 if src.resolve() != dst.resolve():
                     import shutil
+
                     shutil.copy2(src, dst)
                     logger.debug(f"Copied image: {src} -> {dst}")
             except Exception as e:
@@ -365,9 +392,14 @@ class DocumentTranslator:
         self.translation_service = TranslationService()
         self.markdown_processor = MarkdownProcessor()
 
-    def translate_markdown_document(self, md_text: str, out_dir: Optional[Path] = None,
-                                  key: Optional[str] = None, flush_every: int = 20,
-                                  progress_callback=None) -> str:
+    def translate_markdown_document(
+        self,
+        md_text: str,
+        out_dir: Optional[Path] = None,
+        key: Optional[str] = None,
+        flush_every: int = 20,
+        progress_callback=None,
+    ) -> str:
         """
         Translate a markdown document while preserving structure.
 
@@ -391,7 +423,11 @@ class DocumentTranslator:
         out_parts: List[str] = []
 
         # Load checkpoint if available
-        checkpoint = self._load_checkpoint(out_dir, key) if (out_dir and key) else {"done": 0, "parts": []}
+        checkpoint = (
+            self._load_checkpoint(out_dir, key)
+            if (out_dir and key)
+            else {"done": 0, "parts": []}
+        )
         start_i = checkpoint.get("done", 0)
         if start_i > 0:
             out_parts = checkpoint["parts"][:start_i]

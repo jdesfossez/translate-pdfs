@@ -1,8 +1,8 @@
 # Web Framework
-fastapi==0.104.1
+fastapi==0.115.6
 uvicorn[standard]==0.24.0
-python-multipart==0.0.6
-jinja2==3.1.2
+python-multipart==0.0.18
+jinja2==3.1.6
 
 # Queue Management
 redis==5.0.1
