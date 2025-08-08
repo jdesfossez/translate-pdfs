@@ -89,7 +89,7 @@ class TestJobsAPI:
 
         response = client.post("/api/jobs", files=files, data=data)
         assert response.status_code == 400
-        assert "Only PDF files are supported" in response.json()["detail"]
+        assert "File extension not allowed. Allowed: .pdf" in response.json()["detail"]
 
     def test_create_job_file_too_large(self, client, test_settings):
         """Test job creation with file too large."""
