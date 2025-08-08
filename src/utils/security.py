@@ -188,6 +188,9 @@ def validate_upload_file(file: UploadFile, max_file_size: int = MAX_FILE_SIZE) -
         )
         return sanitized_filename, file_content
 
+    except HTTPException:
+        # Re-raise HTTPExceptions as-is (they already have the correct status code)
+        raise
     except SecurityError as e:
         logger.warning(f"Security validation failed for file {file.filename}: {e}")
         raise HTTPException(status_code=400, detail=str(e))
