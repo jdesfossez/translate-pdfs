@@ -138,12 +138,13 @@ def validate_file_content(file_content: bytes) -> Tuple[bool, str]:
     return False, "Not a valid PDF file"
 
 
-def validate_upload_file(file: UploadFile) -> Tuple[str, bytes]:
+def validate_upload_file(file: UploadFile, max_file_size: int = MAX_FILE_SIZE) -> Tuple[str, bytes]:
     """
     Comprehensive validation of uploaded file.
 
     Args:
         file: FastAPI UploadFile object
+        max_file_size: Maximum file size in bytes (defaults to global MAX_FILE_SIZE)
 
     Returns:
         Tuple of (sanitized_filename, file_content)
@@ -165,10 +166,10 @@ def validate_upload_file(file: UploadFile) -> Tuple[str, bytes]:
         if len(file_content) == 0:
             raise HTTPException(status_code=400, detail="File is empty")
 
-        if len(file_content) > MAX_FILE_SIZE:
+        if len(file_content) > max_file_size:
             raise HTTPException(
                 status_code=400,
-                detail=f"File too large. Maximum size: {MAX_FILE_SIZE // (1024*1024)}MB",
+                detail=f"File too large. Maximum size: {max_file_size // (1024*1024)}MB",
             )
 
         # Validate MIME type
