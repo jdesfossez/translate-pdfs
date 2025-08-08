@@ -191,6 +191,18 @@ class TestDocumentProcessor:
         with pytest.raises(DocumentProcessingError, match="Docling conversion failed"):
             processor._run_docling(input_path, work_dir)
 
+    @patch("docling.document_converter.DocumentConverter", side_effect=ImportError("No module named 'docling'"))
+    def test_run_docling_import_error(self, mock_converter_class, tmp_path):
+        """Test Docling import error handling."""
+        processor = DocumentProcessor()
+        input_path = tmp_path / "input.pdf"
+        input_path.write_bytes(b"fake pdf")
+        work_dir = tmp_path / "work"
+        work_dir.mkdir()
+
+        with pytest.raises(DocumentProcessingError, match="Docling import failed"):
+            processor._run_docling(input_path, work_dir)
+
     @patch("subprocess.run")
     def test_generate_pdf_success(self, mock_run, tmp_path):
         """Test successful PDF generation."""
