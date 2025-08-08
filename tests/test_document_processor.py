@@ -174,11 +174,13 @@ class TestDocumentProcessor:
         mock_converter_class.assert_called_once()
         mock_converter.convert.assert_called_once_with(str(input_path))
 
-    @patch("subprocess.run")
-    def test_run_docling_no_output(self, mock_run, tmp_path):
-        """Test Docling with no output file."""
-        mock_run.return_value.returncode = 0
-        mock_run.return_value.stderr = ""
+    @patch("docling.document_converter.DocumentConverter")
+    def test_run_docling_failure(self, mock_converter_class, tmp_path):
+        """Test Docling conversion failure."""
+        # Mock the converter to raise an exception
+        mock_converter = Mock()
+        mock_converter_class.return_value = mock_converter
+        mock_converter.convert.side_effect = Exception("Conversion failed")
 
         processor = DocumentProcessor()
         input_path = tmp_path / "input.pdf"
@@ -186,7 +188,7 @@ class TestDocumentProcessor:
         work_dir = tmp_path / "work"
         work_dir.mkdir()
 
-        with pytest.raises(DocumentProcessingError, match="No markdown file generated"):
+        with pytest.raises(DocumentProcessingError, match="Docling conversion failed"):
             processor._run_docling(input_path, work_dir)
 
     @patch("subprocess.run")
