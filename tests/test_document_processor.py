@@ -96,7 +96,7 @@ class TestDocumentProcessor:
         with pytest.raises(DocumentProcessingError, match="OCR processing timed out"):
             processor._run_ocr(input_path, work_dir, DocumentType.SCAN)
 
-    @patch("src.services.document_processor.DocumentConverter")
+    @patch("docling.document_converter.DocumentConverter")
     def test_run_docling_success(self, mock_converter_class, tmp_path):
         """Test successful Docling conversion using Python API."""
         # Mock the converter and result
