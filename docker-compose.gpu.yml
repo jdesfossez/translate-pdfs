@@ -30,6 +30,8 @@ services:
       - ./logs:/app/logs
       - ./data:/app/data
       - model_cache:/home/appuser/.cache
+    gpus:
+      - device: all
     environment:
       - PDF_TRANSLATE_LOG_LEVEL=INFO
       - PDF_TRANSLATE_HOST=0.0.0.0
@@ -71,6 +73,8 @@ services:
       - ./logs:/app/logs
       - ./data:/app/data
       - model_cache:/home/appuser/.cache
+    gpus:
+      - device: all
     environment:
       - PDF_TRANSLATE_LOG_LEVEL=INFO
       - PDF_TRANSLATE_REDIS_URL=redis://redis:6379/0

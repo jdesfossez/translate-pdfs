@@ -17,6 +17,8 @@ pandoc==2.3
 
 # Translation & ML
 torch==2.5.1
+torchvision==0.20.1
+torchaudio==2.5.1
 transformers>=4.35.0
 accelerate>=0.24.0
 huggingface-hub>=0.19.0

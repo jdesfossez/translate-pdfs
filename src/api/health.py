@@ -7,13 +7,13 @@ from datetime import datetime
 from typing import Any, Dict
 
 import redis
-import torch
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import text
 
 from src.config import get_settings
 from src.database import get_db
+from src.utils.gpu import collect_gpu_info
 
 logger = logging.getLogger(__name__)
 
@@ -36,13 +36,26 @@ class HealthResponse(BaseModel):
 async def health_check():
     """Comprehensive health check endpoint."""
     settings = get_settings()
+    gpu_info = collect_gpu_info()
 
     health_status = HealthResponse(
         status="healthy",
         timestamp=datetime.utcnow().isoformat(),
-        gpu_available=torch.cuda.is_available(),
-        gpu_count=torch.cuda.device_count() if torch.cuda.is_available() else 0,
+        gpu_available=gpu_info["available"],
+        gpu_count=gpu_info.get("device_count", 0),
     )
+
+    if gpu_info["available"]:
+        devices = gpu_info.get("devices", [])
+        gh200_present = any("GH200" in dev.get("name", "") for dev in devices)
+        health_status.metrics["gpu"] = {
+            "cuda_version": gpu_info.get("cuda_version"),
+            "gh200_detected": gh200_present,
+            "devices": devices,
+        }
+        health_status.checks["gpu"] = "healthy" if devices else "warning: no devices"
+    else:
+        health_status.checks["gpu"] = "not available"
 
     # Check database
     try:
@@ -109,12 +122,17 @@ async def readiness_check():
         redis_client = redis.from_url(settings.redis_url)
         redis_client.ping()
 
-        return {"status": "ready"}
+        return {"status": "ready", "timestamp": datetime.utcnow().isoformat()}
 
     except Exception as e:
         logger.error(f"Readiness check failed: {e}")
         raise HTTPException(
-            status_code=503, detail={"status": "not ready", "error": str(e)}
+            status_code=503,
+            detail={
+                "status": "not ready",
+                "error": str(e),
+                "timestamp": datetime.utcnow().isoformat(),
+            },
         )
 
 

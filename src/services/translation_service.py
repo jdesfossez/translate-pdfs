@@ -18,6 +18,7 @@ from tqdm import tqdm
 from transformers import AutoConfig, AutoModelForSeq2SeqLM, AutoTokenizer
 
 from src.config import get_settings
+from src.utils.gpu import log_gpu_summary
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +56,8 @@ class TranslationService:
         logger.info(f"Loading model: {self.settings.model_name}")
 
         try:
+            gpu_summary = log_gpu_summary(logger)
+
             # Download model files
             repo_dir = snapshot_download(
                 repo_id=self.settings.model_name,
@@ -85,7 +88,20 @@ class TranslationService:
 
             # Setup device and dtype
             device_map = {"": "cuda"} if torch.cuda.is_available() else {"": "cpu"}
-            dtype = torch.bfloat16 if torch.cuda.is_available() else torch.float32
+            if torch.cuda.is_available():
+                dtype = torch.float16
+                try:
+                    devices = gpu_summary.get("devices", []) if gpu_summary else []
+                    if any(
+                        dev.get("compute_capability", "").startswith("9")
+                        or "GH200" in dev.get("name", "")
+                        for dev in devices
+                    ):
+                        dtype = torch.bfloat16
+                except Exception:
+                    dtype = torch.bfloat16
+            else:
+                dtype = torch.float32
 
             # Load checkpoint and dispatch to device
             model = load_checkpoint_and_dispatch(
@@ -131,7 +147,7 @@ class TranslationService:
             self._model_loaded = True
             device_str = "cuda" if torch.cuda.is_available() else "cpu"
             logger.info(
-                f"Model loaded successfully on {device_str} | Arch: {platform.machine()}"
+                f"Model loaded successfully on {device_str} | Arch: {platform.machine()} | dtype: {dtype}"
             )
 
         except Exception as e:

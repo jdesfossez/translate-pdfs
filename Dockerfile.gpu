@@ -1,5 +1,5 @@
 # GPU-enabled Dockerfile for PDF Translation Service
-FROM nvidia/cuda:12.1-devel-ubuntu22.04
+FROM nvidia/cuda:12.4.1-devel-ubuntu22.04
 
 # Set environment variables
 ENV DEBIAN_FRONTEND=noninteractive
@@ -44,8 +44,11 @@ RUN apt-get update && apt-get install -y \
 COPY requirements.txt /tmp/requirements.txt
 RUN pip3 install --no-cache-dir -r /tmp/requirements.txt
 
-# Ensure docling and its dependencies are properly installed
-RUN pip3 install --no-cache-dir docling
+# Install CUDA-enabled PyTorch stack (GH200 compatible)
+RUN pip3 install --no-cache-dir --force-reinstall --no-deps --index-url https://download.pytorch.org/whl/cu124 \
+        torch==2.5.1 \
+        torchvision==0.20.1 \
+        torchaudio==2.5.1
 
 # Create non-root user
 RUN useradd -m -u 1000 appuser && \
