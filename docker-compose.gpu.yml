@@ -31,7 +31,7 @@ services:
       - ./data:/app/data
       - model_cache:/home/appuser/.cache
     environment:
-      - PDF_TRANSLATE_DEBUG=false
+      - PDF_TRANSLATE_LOG_LEVEL=INFO
       - PDF_TRANSLATE_HOST=0.0.0.0
       - PDF_TRANSLATE_PORT=8000
       - PDF_TRANSLATE_REDIS_URL=redis://redis:6379/0
@@ -72,7 +72,7 @@ services:
       - ./data:/app/data
       - model_cache:/home/appuser/.cache
     environment:
-      - PDF_TRANSLATE_DEBUG=false
+      - PDF_TRANSLATE_LOG_LEVEL=INFO
       - PDF_TRANSLATE_REDIS_URL=redis://redis:6379/0
       - PDF_TRANSLATE_DATABASE_URL=sqlite:///./data/jobs.db
       - PDF_TRANSLATE_MODEL_NAME=facebook/nllb-200-3.3B
